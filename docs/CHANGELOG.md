@@ -2,6 +2,25 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.35] — 2026-11-07 (Session 35 / Round 4 Task T1 — Enforce Dispute and Reversal Freezes on Database Refund Path)
+
+### Database-Backed Dispute and Capture Reversal Freeze Enforcement (RV3-11 HIGH, FR-75)
+- **Alembic Migration & Order Model Sync (`backend/migrations/versions/0003_order_dispute_and_reversal_freeze.py`, `backend/db/models.py`)**:
+  - Added `frozen_by_dispute` (`BOOLEAN NOT NULL DEFAULT FALSE`), `frozen_at` (`TIMESTAMP`), `frozen_reason` (`VARCHAR`), `capture_reversed` (`BOOLEAN NOT NULL DEFAULT FALSE`), and `reversed_at` (`TIMESTAMP`) to `orders` table and `Order` SQLModel class.
+- **Transactional Webhook Freeze & Deduplication (`backend/payments/webhooks.py`, `backend/db/repository.py`)**:
+  - Added `DatabaseRepository.process_webhook_event_transactional` and wired `WebhookProcessor.process_webhook` to execute deduplication and order freeze/reversal (`CUSTOMER.DISPUTE.CREATED` -> `frozen_by_dispute=True`, `frozen_at`, `frozen_reason`; `PAYMENT.CAPTURE.REVERSED` -> `capture_reversed=True`, `reversed_at`) in the **same database transaction** as the `WebhookEvent` record.
+  - Unknown orders return 404 `ORDER_NOT_FOUND` without recording the event as processed.
+- **Repository Refund Planning Freeze Guard (`backend/db/repository.py`, `backend/api/app.py`)**:
+  - Enforced `OrderFrozenError` across all repository refund planning paths (`plan_refund_action_transactional`, `record_evidence_pack_transactional`, `record_review_and_settlement_transactional`) when `order.frozen_by_dispute` or `order.capture_reversed` is true.
+  - API endpoints (`/v1/returns/{return_id}/evidence`, `/v1/review/{return_id}/decision`) return HTTP `409 ORDER_FROZEN` without planning any new `RefundAction` row; already-confirmed refunds remain untouched.
+- **Outbox Executor Freeze Blocking (`backend/db/repository.py`, `backend/payments/outbox.py`)**:
+  - Updated `claim_planned_refund_actions` to check the locked `Order` row for each candidate action; if `frozen_by_dispute` or `capture_reversed` is set, marks the action `BLOCKED_BY_DISPUTE` and decrements `order.pending_refunded_minor` in the same transaction without dispatching to PayPal.
+- **Single Source of Truth (`backend/payments/ledger.py`, `backend/payments/failures.py`)**:
+  - Removed in-memory freeze fields (`frozen_by_dispute`, `reversed_by_chargeback`) and mutators (`freeze_order`, `reverse_order_capture`) from `RefundLedger` and `OrderCaptureRecord`.
+  - Both `DatabaseRepository.is_order_frozen` and `RefundLedger.is_order_frozen` read `order.frozen_by_dispute or order.capture_reversed` exclusively from the database `Order` columns.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t1_dispute_freeze_db.py`)**:
+  - 5/5 new API/DB tests passing; full suite 225 passed, 4 deselected, 0 failed.
+
 ## [1.2.1-dev.34] — 2026-11-07 (Session 34 / Round 4 Task T0 — Anti-Pattern Gate v2 & Baseline Commit)
 
 ### Anti-Pattern Gate v2 Installation & Baseline Commit (R4-T0)

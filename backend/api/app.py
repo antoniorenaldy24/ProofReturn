@@ -113,6 +113,7 @@ from backend.observability.metrics import AlertScheduler, MetricsRegistry, evalu
 from backend.payments.client import PayPalSandboxClient
 from backend.payments.outbox import RefundOutboxExecutor
 from backend.payments.ledger import (
+    OrderFrozenError,
     OverRefundError,
     RefundLedger,
     compute_deterministic_request_id,
@@ -235,8 +236,8 @@ def create_app(
     )
     clock_offset_seconds = 0
 
-    # Payments & Webhook Infrastructure (J-06, AUD-02, AUD-24, RV-14, RV2-04)
-    refund_ledger = RefundLedger()
+    # Payments & Webhook Infrastructure (J-06, AUD-02, AUD-24, RV-14, RV2-04, RV3-11)
+    refund_ledger = RefundLedger(repository=repo)
     for ord_obj in repo.list_orders():
         if ord_obj.capture_id:
             refund_ledger.register_order(
@@ -1085,6 +1086,8 @@ def create_app(
             )
         except MissingCaptureError as exc:
             return _problem(409, "CAPTURE_MISSING", "Capture Missing", str(exc))
+        except OrderFrozenError as exc:
+            return _problem(409, "ORDER_FROZEN", "Order Frozen", str(exc))
         except OverRefundError as exc:
             return _problem(409, "REFUND_LIMIT_EXCEEDED", "Refund Limit Exceeded", str(exc))
         except InvalidStateTransitionError as exc:
@@ -1571,6 +1574,8 @@ def create_app(
             )
         except MissingCaptureError as exc:
             return _problem(409, "CAPTURE_MISSING", "Capture Missing", str(exc))
+        except OrderFrozenError as exc:
+            return _problem(409, "ORDER_FROZEN", "Order Frozen", str(exc))
         except OverRefundError as exc:
             return _problem(409, "REFUND_LIMIT_EXCEEDED", "Refund Limit Exceeded", str(exc))
         except InvalidStateTransitionError as exc:

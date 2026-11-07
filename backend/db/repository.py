@@ -57,6 +57,7 @@ from backend.domain.return_state import (
 from backend.domain.signing import get_packer_keypair, sha256_hex, sign_message_ed25519
 from backend.payments.ledger import (
     IdempotencyConflictError,
+    OrderFrozenError,
     OverRefundError,
     compute_deterministic_request_id,
 )
@@ -545,6 +546,53 @@ class DatabaseRepository:
         with self.get_session() as session:
             return session.get(Order, order_id)
 
+    def is_order_frozen(self, order_id: str) -> bool:
+        """Read Order.frozen_by_dispute and Order.capture_reversed columns from the database (RV3-11, FR-75)."""
+        with self.get_session() as session:
+            order = session.get(Order, order_id)
+            if order is None:
+                raise KeyError(f"Unknown order {order_id}")
+            return bool(order.frozen_by_dispute or order.capture_reversed)
+
+    def ensure_order_registered(
+        self,
+        *,
+        order_id: str,
+        merchant_id: str,
+        capture_id: str,
+        capture_amount_minor: int,
+        currency: str = "USD",
+    ) -> Order:
+        """Ensure an Order row exists in DB so freeze/reversal columns have a single DB source of truth (RV3-11)."""
+        with self._lock, self.get_session() as session:
+            existing = session.get(Order, order_id)
+            if existing is not None:
+                return existing
+            if session.get(Merchant, merchant_id) is None:
+                session.add(Merchant(merchant_id=merchant_id, name=merchant_id, currency=currency))
+            if session.get(ShopperAccount, "shopper_1") is None:
+                session.add(ShopperAccount(account_id="shopper_1", identity_group_id="grp_01", trust_tier="TRUSTED"))
+            pver = f"pol_{merchant_id}"
+            if session.get(Policy, pver) is None:
+                session.add(Policy(policy_version=pver, merchant_id=merchant_id, jurisdiction="US_CA"))
+            session.flush()
+            order = Order(
+                order_id=order_id,
+                merchant_id=merchant_id,
+                account_id="shopper_1",
+                policy_version=pver,
+                paypal_order_id=f"PP-{order_id}",
+                capture_id=capture_id,
+                capture_amount_minor=capture_amount_minor,
+                confirmed_refunded_minor=0,
+                pending_refunded_minor=0,
+                currency=currency,
+            )
+            session.add(order)
+            session.commit()
+            session.refresh(order)
+            return order
+
     def list_orders(self, merchant_id: str | None = None) -> list[Order]:
         with self.get_session() as session:
             stmt = select(Order)
@@ -701,6 +749,11 @@ class DatabaseRepository:
             if not order:
                 raise ValueError(f"Order {order_id} not found.")
 
+            if order.frozen_by_dispute or order.capture_reversed:
+                raise OrderFrozenError(
+                    f"Order {order_id} is frozen (frozen_by_dispute={order.frozen_by_dispute}, capture_reversed={order.capture_reversed})."
+                )
+
             if not order.capture_id or not order.capture_id.strip():
                 raise MissingCaptureError(f"Order {order_id} has no capture_id.")
 
@@ -746,7 +799,10 @@ class DatabaseRepository:
         limit: int = 10,
         merchant_id: str | None = None,
     ) -> list[RefundAction]:
-        """Claim up to limit PLANNED or UNKNOWN refund actions, marking them SUBMITTED (AUD-02, ARC-19)."""
+        """Claim up to limit PLANNED or UNKNOWN refund actions, marking them SUBMITTED.
+        Skips actions whose order is frozen or reversed, marking them BLOCKED_BY_DISPUTE
+        and releasing pending_refunded_minor in the same transaction (AUD-02, ARC-19, RV3-11, FR-75).
+        """
         with self._lock, self.get_session() as session:
             stmt = (
                 select(RefundAction)
@@ -759,14 +815,29 @@ class DatabaseRepository:
             if not self.engine.url.drivername.startswith("sqlite"):
                 stmt = stmt.with_for_update(skip_locked=True)
             actions = list(session.exec(stmt).all())
+            claimed_actions: list[RefundAction] = []
             for act in actions:
-                act.status = "SUBMITTED"
-                act.attempt_count += 1
-                session.add(act)
+                ord_stmt = select(Order).where(Order.order_id == act.order_id)
+                if not self.engine.url.drivername.startswith("sqlite"):
+                    ord_stmt = ord_stmt.with_for_update()
+                order = session.exec(ord_stmt).first()
+                if order and (order.frozen_by_dispute or order.capture_reversed):
+                    act.status = "BLOCKED_BY_DISPUTE"
+                    act.version += 1
+                    session.add(act)
+                    order.pending_refunded_minor = max(0, order.pending_refunded_minor - act.amount_minor)
+                    order.version += 1
+                    session.add(order)
+                else:
+                    act.status = "SUBMITTED"
+                    act.attempt_count += 1
+                    act.version += 1
+                    session.add(act)
+                    claimed_actions.append(act)
             session.commit()
-            for act in actions:
+            for act in claimed_actions:
                 session.refresh(act)
-            return actions
+            return claimed_actions
 
     def record_refund_confirmed(
         self,
@@ -982,6 +1053,11 @@ class DatabaseRepository:
             if not order:
                 raise ValueError(f"Order {ret.order_id} not found.")
 
+            if order.frozen_by_dispute or order.capture_reversed:
+                raise OrderFrozenError(
+                    f"Order {order.order_id} is frozen (frozen_by_dispute={order.frozen_by_dispute}, capture_reversed={order.capture_reversed})."
+                )
+
             action = None
             if refund_amount_minor > 0:
                 if not order.capture_id or not order.capture_id.strip():
@@ -1119,6 +1195,11 @@ class DatabaseRepository:
             if not order:
                 raise ValueError(f"Order {ret.order_id} not found.")
 
+            if order.frozen_by_dispute or order.capture_reversed:
+                raise OrderFrozenError(
+                    f"Order {order.order_id} is frozen (frozen_by_dispute={order.frozen_by_dispute}, capture_reversed={order.capture_reversed})."
+                )
+
             action = None
             if refund_amount_minor > 0:
                 if not order.capture_id or not order.capture_id.strip():
@@ -1206,6 +1287,75 @@ class DatabaseRepository:
             session.refresh(merged)
             return merged
 
+    def process_webhook_event_transactional(
+        self,
+        *,
+        event_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically deduplicate webhook event and apply dispute/reversal freeze on Order in the SAME transaction (RV3-11, FR-75, AUD-12, RV-14)."""
+        with self._lock, self.get_session() as session:
+            existing_event = session.get(WebhookEvent, event_id)
+            if existing_event is not None:
+                return {
+                    "status_code": 200,
+                    "duplicate": True,
+                    "event_id": event_id,
+                }
+
+            order_id = str(payload.get("order_id", "")).strip()
+            order: Order | None = None
+            if order_id:
+                stmt = select(Order).where(Order.order_id == order_id)
+                if not self.engine.url.drivername.startswith("sqlite"):
+                    stmt = stmt.with_for_update()
+                order = session.exec(stmt).first()
+                if order is None:
+                    # AUD-12: Unknown order — do not record event as processed so future retry succeeds
+                    return {
+                        "status_code": 404,
+                        "code": "ORDER_NOT_FOUND",
+                        "duplicate": False,
+                        "event_id": event_id,
+                    }
+
+            now = datetime.now(timezone.utc)
+            if event_type == "CUSTOMER.DISPUTE.CREATED" and order is not None:
+                res_dict = payload.get("resource") if isinstance(payload.get("resource"), dict) else {}
+                dispute_reason = str(
+                    payload.get("dispute_id")
+                    or res_dict.get("dispute_id")
+                    or res_dict.get("id")
+                    or payload.get("id")
+                    or event_id
+                )
+                order.frozen_by_dispute = True
+                order.frozen_at = now
+                order.frozen_reason = dispute_reason
+                order.version += 1
+                session.add(order)
+            elif event_type == "PAYMENT.CAPTURE.REVERSED" and order is not None:
+                order.capture_reversed = True
+                order.reversed_at = now
+                order.version += 1
+                session.add(order)
+
+            webhook_rec = WebhookEvent(
+                event_id=event_id,
+                event_type=event_type,
+                payload_json=payload,
+            )
+            session.add(webhook_rec)
+            session.commit()
+
+            return {
+                "status_code": 200,
+                "duplicate": False,
+                "event_id": event_id,
+                "event_type": event_type,
+            }
+
     def get_latest_review_by_return(self, return_id: str) -> Review | None:
         with self.get_session() as session:
             stmt = select(Review).where(Review.return_id == return_id).order_by(Review.created_at.desc())
@@ -1288,6 +1438,11 @@ class DatabaseRepository:
             for ord_row in session.exec(select(Order)).all():
                 ord_row.confirmed_refunded_minor = 0
                 ord_row.pending_refunded_minor = 0
+                ord_row.frozen_by_dispute = False
+                ord_row.frozen_at = None
+                ord_row.frozen_reason = None
+                ord_row.capture_reversed = False
+                ord_row.reversed_at = None
                 session.add(ord_row)
             session.commit()
         self.seed_demo_data()

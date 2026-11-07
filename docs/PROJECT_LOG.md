@@ -1145,3 +1145,35 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `python scripts/check_antipatterns.py`: **Exits 1 with exactly 6 anti-pattern findings (`docs/evidence/gate-baseline-R4.txt`)**.
 - `uv run pytest -m "not sandbox and not live_model"`: **220 passed, 4 deselected, 0 failed in 32.83s (unchanged)**.
 - `npm test`: **6 passed (unchanged)**.
+
+---
+
+## [2026-11-07] Session 35 — Round 4 Task T1: Enforce Dispute and Reversal Freezes on the Database Refund Path (RV3-11 HIGH, FR-75)
+
+### 1. Key Accomplishments
+- **Alembic Migration & SQLModel Sync (`backend/migrations/versions/0003_order_dispute_and_reversal_freeze.py`, `backend/db/models.py`)**:
+  - Added `frozen_by_dispute` (`BOOLEAN NOT NULL DEFAULT FALSE`), `frozen_at` (`TIMESTAMP`), `frozen_reason` (`VARCHAR`), `capture_reversed` (`BOOLEAN NOT NULL DEFAULT FALSE`), and `reversed_at` (`TIMESTAMP`) to `orders` table and `Order` model.
+- **Atomic Webhook Freeze & Deduplication (`backend/payments/webhooks.py`, `backend/db/repository.py`)**:
+  - Implemented `DatabaseRepository.process_webhook_event_transactional` and updated `WebhookProcessor.process_webhook` so `CUSTOMER.DISPUTE.CREATED` sets `frozen_by_dispute`, `frozen_at`, and `frozen_reason` (dispute ID), and `PAYMENT.CAPTURE.REVERSED` sets `capture_reversed` and `reversed_at` in the **same transaction** as inserting the `WebhookEvent` deduplication record.
+  - Unknown orders return 404 `ORDER_NOT_FOUND` without persisting `WebhookEvent`.
+- **Refund Planning Freeze Enforcement (`backend/db/repository.py`, `backend/api/app.py`)**:
+  - Added `OrderFrozenError` check across all repository refund planning paths (`plan_refund_action_transactional`, `record_evidence_pack_transactional`, `record_review_and_settlement_transactional`).
+  - Wired API endpoints (`/v1/returns/{return_id}/evidence`, `/v1/review/{return_id}/decision`) to return `409 ORDER_FROZEN` when `frozen_by_dispute` or `capture_reversed` is set, planning no new `RefundAction` row and preserving already-confirmed refunds.
+- **Outbox Executor Freeze Blocking (`backend/db/repository.py`, `backend/payments/outbox.py`)**:
+  - Updated `claim_planned_refund_actions` to skip actions whose order has `frozen_by_dispute` or `capture_reversed`, marking them `BLOCKED_BY_DISPUTE` and releasing `order.pending_refunded_minor` in the same transaction so they are never sent to PayPal.
+- **Single Source of Truth (`backend/payments/ledger.py`, `backend/payments/failures.py`)**:
+  - Removed in-memory freeze flags (`frozen_by_dispute`, `reversed_by_chargeback`) and mutators (`freeze_order`, `reverse_order_capture`) from `OrderCaptureRecord` and `RefundLedger`.
+  - Both `DatabaseRepository.is_order_frozen` and `RefundLedger.is_order_frozen` read `order.frozen_by_dispute or order.capture_reversed` directly from the database `Order` columns.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t1_dispute_freeze_db.py`)**:
+  - Authored and verified 5 TDD tests (red -> green):
+    1. `test_dispute_webhook_after_r0_confirmed_blocks_subsequent_planning_with_409_order_frozen`
+    2. `test_dispute_webhook_while_r1_planned_marks_blocked_by_dispute_and_releases_pending`
+    3. `test_capture_reversed_webhook_blocks_planning_and_outbox_execution`
+    4. `test_freeze_survives_application_restart`
+    5. `test_rejected_unsigned_webhook_does_not_freeze_anything`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t1_dispute_freeze_db.py -v`: **5 passed in 2.05s**.
+- `uv run pytest -m "not sandbox and not live_model"`: **225 passed, 4 deselected, 0 failed (100% pass rate)**.
+- `is_order_frozen` single source of truth check: Only `DatabaseRepository.is_order_frozen` and `RefundLedger.is_order_frozen` exist in non-test backend code, both reading `order.frozen_by_dispute or order.capture_reversed` from the DB `Order` row.
+

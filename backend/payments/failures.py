@@ -97,7 +97,8 @@ def simulate_failure_mode(fx_id: str) -> dict[str, Any]:
                 signature_valid=True,
                 payload={"order_id": "ord_fx"},
             )
-            return {"fx_id": fx_id, "handled": ledger.is_order_frozen("ord_fx") is True}
+            ord_fx = ledger.repository.get_order("ord_fx")
+            return {"fx_id": fx_id, "handled": bool(ord_fx is not None and ord_fx.frozen_by_dispute)}
         if fx_id == "FX-19":
             proc.process_webhook(
                 event_id="e19",

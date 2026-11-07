@@ -1,0 +1,461 @@
+{
+  "format": "proofreturn_snapshot_v1",
+  "created_at": "2026-11-07T06:59:30.187083+00:00",
+  "tables_count": 23,
+  "total_rows": 30,
+  "data": {
+    "merchants": [
+      {
+        "instant_exposure_cap_minor": 500000,
+        "outstanding_instant_exposure_minor": 0,
+        "name": "Acme Electronics",
+        "merchant_id": "merch_a",
+        "currency": "USD",
+        "version": 1,
+        "created_at": "2026-11-07T06:40:39.554038Z"
+      },
+      {
+        "instant_exposure_cap_minor": 500000,
+        "outstanding_instant_exposure_minor": 0,
+        "name": "Beta Gadgets",
+        "merchant_id": "merch_b",
+        "currency": "USD",
+        "version": 1,
+        "created_at": "2026-11-07T06:40:39.555777Z"
+      }
+    ],
+    "policies": [
+      {
+        "jurisdiction": "US_CA",
+        "policy_version": "pol_v1_us_ca",
+        "merchant_id": "merch_a",
+        "config_json": {
+          "curve": {
+            "A": 1.0,
+            "B": 0.95,
+            "C": 0.8,
+            "D": 0.5
+          },
+          "fee_f_minor": 1500,
+          "c_ship_minor": 800,
+          "salvage_ ratios": {
+            "A": 0.85,
+            "B": 0.7,
+            "C": 0.5,
+            "D": 0.25,
+            "DEF": 0.1
+          }
+        },
+        "created_at": "2026-11-07T06:40:39.560491Z",
+        "return_window_days": 30
+      },
+      {
+        "jurisdiction": "US_CA",
+        "policy_version": "pol_electronics_us_v1",
+        "merchant_id": "merch_a",
+        "config_json": {
+          "curve": {
+            "A": 1.0,
+            "B": 0.95,
+            "C": 0.8,
+            "D": 0.5
+          },
+          "fee_f_minor": 1500,
+          "c_ship_minor": 800,
+          "salvage_ ratios": {
+            "A": 0.85,
+            "B": 0.7,
+            "C": 0.5,
+            "D": 0.25,
+            "DEF": 0.1
+          }
+        },
+        "created_at": "2026-11-07T06:40:39.561021Z",
+        "return_window_days": 30
+      },
+      {
+        "jurisdiction": "US_NY",
+        "policy_version": "pol_merch_b_v1",
+        "merchant_id": "merch_b",
+        "config_json": {
+          "curve": {
+            "A": 1.0,
+            "B": 0.95,
+            "C": 0.8,
+            "D": 0.5
+          },
+          "fee_f_minor": 1500,
+          "c_ship_minor": 800,
+          "salvage_ ratios": {
+            "A": 0.85,
+            "B": 0.7,
+            "C": 0.5,
+            "D": 0.25,
+            "DEF": 0.1
+          }
+        },
+        "created_at": "2026-11-07T06:40:39.561021Z",
+        "return_window_days": 30
+      }
+    ],
+    "shopper_accounts": [
+      {
+        "clean_Counter_verified_returns": 5,
+        "account_age_days": 120,
+        "identity_group_id": "grp_01",
+        "cusum_score": 0.0,
+        "account_id": "shopper_1",
+        "trust_tier": "TRUSTED",
+        "version": 1,
+        "created_at": "2026-11-07T06:40:39.559438Z"
+      },
+      {
+        "clean_Counter_verified_returns": 0,
+        "account_age_days": 10,
+        "identity_group_id": "grp_02",
+        "cusum_score": 0.0,
+        "account_id": "shopper_2",
+        "trust_tier": "NEW",
+        "version": 1,
+        "created_at": "2026-11-07T06:40:39.559965Z"
+      },
+      {
+        "clean_Counter_verified_returns": 0,
+        "account_age_days": 10,
+        "identity_group_id": "grp_b1",
+        "cusum_score": 0.0,
+        "account_id": "shopper_b",
+        "trust_tier": "ESTABLISHED",
+        "version": 1,
+        "created_at": "2026-11-07T06:40:39.559965Z"
+      }
+    ],
+    "staff_users": [
+      {
+        "role": "PACKER",
+        "staff_id": "pack_01",
+        "email_hash": "362aebaf37f664a0c89421b5c4cec130a07f3fc1c149dc949b47c1bdccf39af0",
+        "created_at": "2026-11-07T06:40:39.556302Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "RECEIVER",
+        "staff_id": "recv_01",
+        "email_hash": "7377286648757adff6483ba3a0fe333b8aa5b871cbb73b1897a59accd6a80826",
+        "created_at": "2026-11-07T06:40:39.557335Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "REVIEWER",
+        "staff_id": "rev_01",
+        "email_hash": "94af341478047960f0cb5b7a13b1b99f114a8b6b8eecd9102e814fccc4930371",
+        "created_at": "2026-11-07T06:40:39.557335Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "REVIEWER",
+        "staff_id": "rev_02",
+        "email_hash": "b2399dfda4a6d4b793756b45e50033262f58c8b172eb9a5e39bd19cfa56ea875",
+        "created_at": "2026-11-07T06:40:39.557854Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "REVIEWER",
+        "staff_id": "rev_initial_01",
+        "email_hash": "2e317ec7c9cdb6cd7113c6996a75a102e3a5235c6d9b8a7c8e1925605d25549b",
+        "created_at": "2026-11-07T06:40:39.557854Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "MERCHANT_ADMIN",
+        "staff_id": "admin_01",
+        "email_hash": "ff3cdc6f9256fa4cba93fc315f2f14794ab4978da6545fb811501c95d755cf75",
+        "created_at": "2026-11-07T06:40:39.558376Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "MERCHANT_OPERATOR",
+        "staff_id": "op_01",
+        "email_hash": "dd14c7bc8d121a2b4a71e1b2b2b3e27acc046f3a4d676596399e5eb2ffab9e9c",
+        "created_at": "2026-11-07T06:40:39.558376Z",
+        "merchant_id": "merch_a"
+      },
+      {
+        "role": "MERCHANT_ADMIN",
+        "staff_id": "admin_b_01",
+        "email_hash": "d467262b6e7dfad2b0d6ae31d524f5c54fb6cb284617e7790c506fec08101615",
+        "created_at": "2026-11-07T06:40:39.558903Z",
+        "merchant_id": "merch_b"
+      }
+    ],
+    "serial_registry": [],
+    "orders": [
+      {
+        "paypal_order_id": "PP-ord_demo_1",
+        "order_id": "ord_demo_1",
+        "account_id": "shopper_1",
+        "capture_id": "CAP_ORD_DEMO_1",
+        "frozen_by_dispute": false,
+        "frozen_reason": null,
+        "reversed_at": null,
+        "currency": "USD",
+        "created_at": "2026-11-07T06:40:39.563679Z",
+        "merchant_id": "merch_a",
+        "policy_version": "pol_electronics_us_v1",
+        "capture_amount_minor": 38000,
+        "confirmed_refunded_minor": 0,
+        "pending_refunded_minor": 15000,
+        "frozen_at": null,
+        "capture_reversed": false,
+        "version": 2
+      },
+      {
+        "paypal_order_id": "PP-ord_resale_1",
+        "order_id": "ord_resale_1",
+        "account_id": "shopper_2",
+        "capture_id": "CAP_ORD_RESALE_1",
+        "frozen_by_dispute": false,
+        "frozen_reason": null,
+        "reversed_at": null,
+        "currency": "USD",
+        "created_at": "2026-11-07T06:40:39.564204Z",
+        "merchant_id": "merch_a",
+        "policy_version": "pol_v1_us_ca",
+        "capture_amount_minor": 31500,
+        "confirmed_refunded_minor": 0,
+        "pending_refunded_minor": 0,
+        "frozen_at": null,
+        "capture_reversed": false,
+        "version": 1
+      },
+      {
+        "paypal_order_id": "PP-ord_merch_b_1",
+        "order_id": "ord_merch_b_1",
+        "account_id": "shopper_b",
+        "capture_id": "CAP_ORD_MERCH_B_1",
+        "frozen_by_dispute": false,
+        "frozen_reason": null,
+        "reversed_at": null,
+        "currency": "USD",
+        "created_at": "2026-11-07T06:40:39.564204Z",
+        "merchant_id": "merch_b",
+        "policy_version": "pol_merch_b_v1",
+        "capture_amount_minor": 25000,
+        "confirmed_refunded_minor": 0,
+        "pending_refunded_minor": 0,
+        "frozen_at": null,
+        "capture_reversed": false,
+        "version": 1
+      }
+    ],
+    "order_items": [
+      {
+        "order_id": "ord_demo_1",
+        "order_item_id": "item_demo_1",
+        "sku": "PR-HP-XM5",
+        "passport_id": "pass_demo_1",
+        "price_minor": 38000,
+        "currency": "USD"
+      },
+      {
+        "order_id": "ord_demo_1",
+        "order_item_id": "item_demo_2",
+        "sku": "PR-HP-XM5",
+        "passport_id": "pass_demo_1",
+        "price_minor": 38000,
+        "currency": "USD"
+      },
+      {
+        "order_id": "ord_resale_1",
+        "order_item_id": "item_resale_1",
+        "sku": "PR-HP-XM5",
+        "passport_id": "pass_demo_1",
+        "price_minor": 31500,
+        "currency": "USD"
+      },
+      {
+        "order_id": "ord_merch_b_1",
+        "order_item_id": "item_merch_b_1",
+        "sku": "PR-KB-PRO",
+        "passport_id": null,
+        "price_minor": 25000,
+        "currency": "USD"
+      }
+    ],
+    "returns": [
+      {
+        "shopper_id": "shopper_1",
+        "timing": "R0",
+        "currency": "USD",
+        "audit_commitment": "182d8ad2b698c80a5e3912a9c3d9ecddca585e761ff6713152a9ce9ece497c39",
+        "retake_count": 0,
+        "declared_grade": "B",
+        "challenge_nonce": "NONCE-F47E9B2E35677CEF",
+        "audit_probability": 0.05,
+        "version": 1,
+        "disputed": false,
+        "reason_code": "CHANGED_MIND",
+        "consent_recorded": true,
+        "appeal_open": false,
+        "reason_text": "",
+        "refiled": false,
+        "accessories_json": {},
+        "created_at": "2026-11-07T06:40:39.566303Z",
+        "return_id": "ret_demo_1",
+        "order_id": "ord_demo_1",
+        "r0_tranche_minor": 0,
+        "seal_nonce_hash": null,
+        "order_item_id": "item_demo_1",
+        "state": "DECLARED",
+        "shopper_nonce": "shopper_nonce_seed_01",
+        "dropoff_photo_ref": null,
+        "merchant_id": "merch_a",
+        "lane": "FAST",
+        "audit_seed_hex": "611921eab8faa4926268ab73d057a3382c18c1bc296de7085ced8089bdb6b70a",
+        "carrier_tracking_number": null
+      },
+      {
+        "shopper_id": "shopper_1",
+        "timing": "R3",
+        "currency": "USD",
+        "audit_commitment": "361ec95a1a1adb9dfd799ab31f1b98efa9e24e14ae27459936b978b2afb5daee",
+        "retake_count": 0,
+        "declared_grade": "B",
+        "challenge_nonce": "NONCE-0E18E35AF417E23A",
+        "audit_probability": 0.05,
+        "version": 1,
+        "disputed": false,
+        "reason_code": "CHANGED_MIND",
+        "consent_recorded": true,
+        "appeal_open": false,
+        "reason_text": "",
+        "refiled": false,
+        "accessories_json": {},
+        "created_at": "2026-11-07T06:40:39.567310Z",
+        "return_id": "ret_demo_escalated",
+        "order_id": "ord_demo_1",
+        "r0_tranche_minor": 0,
+        "seal_nonce_hash": null,
+        "order_item_id": "item_demo_2",
+        "state": "ESCALATED",
+        "shopper_nonce": "shopper_nonce_seed_01",
+        "dropoff_photo_ref": null,
+        "merchant_id": "merch_a",
+        "lane": "MANUAL",
+        "audit_seed_hex": "114f88ecdd9ec3fe925746dd4b15f8285bdfde0ee9e2af01ca14d2963e300ede",
+        "carrier_tracking_number": null
+      },
+      {
+        "shopper_id": "shopper_b",
+        "timing": "R0",
+        "currency": "USD",
+        "audit_commitment": "5cef8508dd3c5bf522cbd8049986d7dd5d341696387034327bae49472accc135",
+        "retake_count": 0,
+        "declared_grade": null,
+        "challenge_nonce": "NONCE-E77B33D67D637B88",
+        "audit_probability": 0.05,
+        "version": 1,
+        "disputed": false,
+        "reason_code": "CHANGED_MIND",
+        "consent_recorded": false,
+        "appeal_open": false,
+        "reason_text": "",
+        "refiled": false,
+        "accessories_json": {},
+        "created_at": "2026-11-07T06:40:39.567310Z",
+        "return_id": "ret_merch_b_01",
+        "order_id": "ord_merch_b_1",
+        "r0_tranche_minor": 0,
+        "seal_nonce_hash": null,
+        "order_item_id": "item_merch_b_1",
+        "state": "REQUESTED",
+        "shopper_nonce": null,
+        "dropoff_photo_ref": null,
+        "merchant_id": "merch_b",
+        "lane": "FAST",
+        "audit_seed_hex": "ea37e95792d852d794c9ce81b3ff53b1f7b05fd58f1b40cf2c4e8250cc747780",
+        "carrier_tracking_number": null
+      }
+    ],
+    "return_evidence": [],
+    "assessments": [],
+    "decisions": [],
+    "keep_offers": [],
+    "reviews": [
+      {
+        "verified_grade": "C",
+        "return_id": "ret_demo_1",
+        "reviewer_id": "rev_01",
+        "created_at": "2026-11-07T06:40:39.568310Z",
+        "review_id": "rev_rec_demo_1",
+        "outcome": "DOWNGRADED",
+        "notes": "Initial warehouse review."
+      }
+    ],
+    "appeals": [],
+    "resale_listings": [],
+    "passports": [
+      {
+        "sku": "PR-HP-XM5",
+        "tier": "FULL",
+        "passport_id": "pass_demo_1",
+        "serial_commitment": "ebfdd270a2c22da314ebc795b768a1cdccfac71feee990433702e9a2b6ef000c",
+        "signature": "ed25519:AlR1H1XoqFjNvFXNxHZap7TzlG6LVPuKMLy4mhcLANeSUUDW4bjXfIj12og6zyRZx2NOji6X98Am+GyRP1+8Ag==",
+        "weight_g": 250,
+        "current_owner_ref": "shopper_1",
+        "version": 1,
+        "origin_grade": "A",
+        "merchant_id": "merch_a",
+        "head_hash": "6ec2650a70d537eebad95a50cd54d996954427a37e403580819380834a455937",
+        "signing_key_id": "key_packer_origin_01",
+        "self_test_passed": true,
+        "buyer_email": "shopper1@example.com",
+        "created_at": "2026-11-07T06:40:39.562072Z"
+      }
+    ],
+    "passport_events": [
+      {
+        "seq_no": 1,
+        "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "payload_json": {
+          "passport_id": "pass_demo_1",
+          "merchant_id": "merch_a",
+          "sku": "PR-HP-XM5",
+          "tier": "FULL",
+          "origin_grade": "A",
+          "weight_g": 250,
+          "self_test_passed": true
+        },
+        "passport_id": "pass_demo_1",
+        "event_id": "pe_demo_origin_1",
+        "event_hash": "6ec2650a70d537eebad95a50cd54d996954427a37e403580819380834a455937",
+        "signature": "ed25519:AlR1H1XoqFjNvFXNxHZap7TzlG6LVPuKMLy4mhcLANeSUUDW4bjXfIj12og6zyRZx2NOji6X98Am+GyRP1+8Ag==",
+        "created_at": "2026-11-07T06:40:39.562072Z"
+      }
+    ],
+    "custody_events": [],
+    "agent_tokens": [],
+    "refund_actions": [
+      {
+        "decision_id": "dec_drill_01",
+        "merchant_id": "merch_a",
+        "amount_minor": 15000,
+        "currency": "USD",
+        "paypal_debug_id": null,
+        "version": 1,
+        "return_id": "ret_demo_1",
+        "order_id": "ord_demo_1",
+        "request_id": "f9dd64d5-ac6a-5643-a2cb-73424918f906",
+        "capture_id": "CAP_ORD_DEMO_1",
+        "tranche": "R0",
+        "status": "PLANNED",
+        "paypal_refund_id": null,
+        "attempt_count": 0,
+        "created_at": "2026-11-07T06:40:39.571311Z"
+      }
+    ],
+    "webhook_events": [],
+    "identity_link_events": [],
+    "scheduler_leases": []
+  }
+}

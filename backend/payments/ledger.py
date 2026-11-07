@@ -1,14 +1,22 @@
-"""Transactional Refund Outbox and Cumulative Capture Ledger (INV-01, INV-02, INV-03, Section 24.3)."""
+"""Transactional Refund Outbox and Cumulative Capture Ledger (INV-01, INV-02, INV-03, FR-75, RV3-11, Section 24.3)."""
 
 from __future__ import annotations
 
 import threading
 import uuid
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.db.repository import DatabaseRepository
 
 
 class OverRefundError(ValueError):
     """Raised when a planned refund would cause cumulative refunds to exceed capture_amount_minor (INV-01)."""
+
+
+class OrderFrozenError(OverRefundError):
+    """Raised when a refund is planned on an order frozen by dispute or capture reversal (FR-75, RV3-11)."""
 
 
 class IdempotencyConflictError(ValueError):
@@ -20,15 +28,13 @@ PROOFRETURN_REFUND_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 @dataclass
 class OrderCaptureRecord:
-    """Tracks original capture and freeze/reversal status for an order."""
+    """Tracks original capture metadata for an order; freeze/reversal status is read from DB Order columns."""
 
     order_id: str
     merchant_id: str
     capture_id: str
     capture_amount_minor: int
     currency: str = "USD"
-    frozen_by_dispute: bool = False
-    reversed_by_chargeback: bool = False
 
 
 @dataclass
@@ -55,14 +61,24 @@ def compute_deterministic_request_id(decision_id: str, tranche: str) -> str:
 
 class RefundLedger:
     """Enforces INV-01 (no over-refund), INV-02 (merchant/capture binding), and INV-03 (idempotent outbox).
-    All state mutations and balance queries are synchronized with reentrant lock to eliminate race conditions (AUD-11).
+    Freeze/reversal status is read from the single database source of truth (Order.frozen_by_dispute, Order.capture_reversed).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, repository: DatabaseRepository | None = None) -> None:
         self._orders: dict[str, OrderCaptureRecord] = {}
         self._actions_by_request_id: dict[str, RefundActionRecord] = {}
         self._actions_by_order: dict[str, list[RefundActionRecord]] = {}
+        self._repository: DatabaseRepository | None = repository
         self._lock = threading.RLock()
+
+    @property
+    def repository(self) -> DatabaseRepository:
+        with self._lock:
+            if self._repository is None:
+                from backend.db.repository import DatabaseRepository
+
+                self._repository = DatabaseRepository(database_url="sqlite:///:memory:")
+            return self._repository
 
     def register_order(
         self,
@@ -83,6 +99,14 @@ class RefundLedger:
             )
             self._orders[order_id] = rec
             self._actions_by_order.setdefault(order_id, [])
+            if self.repository.get_order(order_id) is None:
+                self.repository.ensure_order_registered(
+                    order_id=order_id,
+                    merchant_id=merchant_id,
+                    capture_id=capture_id,
+                    capture_amount_minor=capture_amount_minor,
+                    currency=currency,
+                )
             return rec
 
     def rehydrate_action(
@@ -123,29 +147,18 @@ class RefundLedger:
             return rec
 
     def is_order_frozen(self, order_id: str) -> bool:
-        with self._lock:
-            rec = self._orders[order_id]
-            return rec.frozen_by_dispute or rec.reversed_by_chargeback
-
-    def freeze_order(self, order_id: str) -> None:
-        with self._lock:
-            if order_id not in self._orders:
-                raise KeyError(f"Unknown order {order_id}")
-            self._orders[order_id].frozen_by_dispute = True
-
-    def reverse_order_capture(self, order_id: str) -> None:
-        with self._lock:
-            if order_id not in self._orders:
-                raise KeyError(f"Unknown order {order_id}")
-            rec = self._orders[order_id]
-            rec.reversed_by_chargeback = True
-            rec.frozen_by_dispute = True
+        """Read Order.frozen_by_dispute and Order.capture_reversed columns from the database (RV3-11, FR-75)."""
+        order = self.repository.get_order(order_id)
+        if order is None:
+            raise KeyError(f"Unknown order {order_id}")
+        return bool(order.frozen_by_dispute or order.capture_reversed)
 
     def remaining_refundable_minor(self, order_id: str) -> int:
-        """Compute remaining_refundable = capture_amount - confirmed - pending (0 if reversed)."""
+        """Compute remaining_refundable = capture_amount - confirmed - pending (0 if capture_reversed in DB)."""
         with self._lock:
             rec = self._orders[order_id]
-            if rec.reversed_by_chargeback:
+            db_order = self.repository.get_order(order_id)
+            if db_order is not None and db_order.capture_reversed:
                 return 0
             actions = self._actions_by_order.get(order_id, [])
             committed = sum(
@@ -165,7 +178,7 @@ class RefundLedger:
         tranche: str,
         amount_minor: int,
     ) -> RefundActionRecord:
-        """Insert or return an idempotent PLANNED refund action after checking INV-01, INV-02, INV-03 under lock."""
+        """Insert or return an idempotent PLANNED refund action after checking INV-01, INV-02, INV-03, and DB freeze under lock."""
         with self._lock:
             if order_id not in self._orders:
                 raise ValueError(f"Unknown order_id: {order_id}")
@@ -178,8 +191,9 @@ class RefundLedger:
                     f"does not match order {order_id}."
                 )
 
-            if order_rec.frozen_by_dispute or order_rec.reversed_by_chargeback:
-                raise OverRefundError(f"Order {order_id} is frozen by dispute or capture reversal.")
+            db_order = self.repository.get_order(order_id)
+            if db_order is not None and (db_order.frozen_by_dispute or db_order.capture_reversed):
+                raise OrderFrozenError(f"Order {order_id} is frozen by dispute or capture reversal.")
 
             request_id = compute_deterministic_request_id(decision_id, tranche)
             if request_id in self._actions_by_request_id:

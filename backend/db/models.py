@@ -13,7 +13,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Column, ForeignKey, Integer, String
+from sqlalchemy import JSON, BigInteger, Boolean, Column, ForeignKey, Integer, String
 from sqlmodel import Field, SQLModel
 
 
@@ -171,6 +171,15 @@ class Order(SQLModel, table=True):
     pending_refunded_minor: int = Field(
         default=0, sa_column=Column(BigInteger, nullable=False, default=0)
     )
+    frozen_by_dispute: bool = Field(
+        default=False, sa_column=Column(Boolean, nullable=False, default=False)
+    )
+    frozen_at: datetime | None = Field(default=None)
+    frozen_reason: str | None = Field(default=None)
+    capture_reversed: bool = Field(
+        default=False, sa_column=Column(Boolean, nullable=False, default=False)
+    )
+    reversed_at: datetime | None = Field(default=None)
     currency: str = Field(default="USD", sa_column=Column(String(3), nullable=False, default="USD"))
     version: int = Field(default=1, sa_column=Column(Integer, nullable=False, default=1))
     created_at: datetime = Field(default_factory=_utc_now)
