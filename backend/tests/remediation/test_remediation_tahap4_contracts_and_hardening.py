@@ -158,7 +158,7 @@ def test_aud30_rate_limiter_middleware_429() -> None:
 
     client = TestClient(app)
     shopper_token = mint_shopper_token("ord_demo_1", "shopper_1")
-    headers = {"Authorization": f"Bearer {shopper_token}"}
+    headers = {"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t4-ev-shared"}
 
     # First 3 requests succeed
     for _ in range(3):
@@ -233,6 +233,7 @@ def test_aud15_apply_fallback_degradation_via_api(tmp_path: Path) -> None:
     headers = {
         "Authorization": f"Bearer {shopper_token}",
         "X-Fallback-Degradation": "FB-04",  # AI vision service outage
+        "Idempotency-Key": "ik-t4-ev-fb04",
     }
 
     # Submit evidence under degraded mode FB-04
@@ -341,7 +342,7 @@ def test_aud34_contract_api_evidence_matches_policy_engine(tmp_path: Path) -> No
     client = TestClient(app)
 
     shopper_token = mint_shopper_token("ord_demo_1", "shopper_1")
-    headers = {"Authorization": f"Bearer {shopper_token}"}
+    headers = {"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t4-ev-shared"}
 
     # 1. Direct Policy Engine calculation
     order = repo.get_order("ord_demo_1")

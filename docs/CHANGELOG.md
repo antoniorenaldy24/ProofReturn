@@ -2,6 +2,20 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.42] — 2026-11-08 (Session 42 / Round 4 Task T8 — Error Catalog, Idempotency, and OpenAPI Request Schemas)
+
+### Error Code Catalog, Mandatory Idempotency-Key, and Typed OpenAPI Request Schemas (RV3-08 LOW, AUD-40 LOW)
+- **Centralized Error Code Module & Change Control Document (`backend/api/errors.py`, `docs/change-control/CR-R4-error-codes.md`, `backend/api/app.py`, `backend/api/middleware.py`)**:
+  - Created `backend/api/errors.py` defining `ErrorCode` (`StrEnum`), `SSOT_ERROR_CODES` (21 codes from `docs/SSOT.md` §28.2), `CR_R4_ERROR_CODES` (28 extension codes not in `docs/SSOT.md` §28.2), and `ALL_ERROR_CODES`.
+  - Created `docs/change-control/CR-R4-error-codes.md` documenting all 28 extension error codes (meaning, HTTP status, source) and listing all 11 mandatory `Idempotency-Key` POST endpoints without editing `docs/SSOT.md`.
+  - Replaced all literal error code strings in `_problem(...)` and `ProblemDetails` across `backend/api/app.py` and `backend/api/middleware.py` with `ErrorCode` constants.
+- **Mandatory `Idempotency-Key` Across 11 POST Endpoints (`backend/api/app.py`)**:
+  - Enforced `Idempotency-Key` (`400 IDEMPOTENCY_KEY_REQUIRED` when missing, replay on same key + same body, `409 IDEMPOTENCY_CONFLICT` on same key + different body, scoped per principal and tenant) on `POST /v1/returns`, `POST /v1/returns/{return_id}/evidence`, `POST /v1/returns/{return_id}/keep-offer/respond`, `POST /v1/review/{return_id}/decision`, `POST /v1/audits/{return_id}`, `POST /v1/review/appeals/{appeal_id}/decision`, `POST /v1/orders/{order_id}/passport`, `POST /v1/passports`, `POST /v1/resale/listings`, `POST /v1/resale/listings/{listing_id}/order`, and `POST /v1/policies`.
+- **Typed FastAPI Request Body Schemas in `/openapi.json` (`backend/api/app.py`, `backend/api/schemas.py`)**:
+  - Replaced all 22 manual `model_validate` calls in `backend/api/app.py` with typed FastAPI Pydantic model parameters (`req_body: <Model>`) so `/openapi.json` documents every `requestBody` schema while preserving the `application/problem+json` `422` validation handler.
+- **TDD & Gate Verification (`backend/tests/remediation/test_remediation_r4_t8_errors_idempotency_openapi.py`)**:
+  - 3/3 new T8 tests passing; full regression suite 251 passed, 4 deselected, 0 failed; `python scripts/check_antipatterns.py` exits `0` with 0 `model_validate` calls in `backend/api/app.py` and 0 findings total; `python scripts/check_refs.py` passes XR-01..XR-10.
+
 ## [1.2.1-dev.41] — 2026-11-07 (Session 41 / Round 4 Task T7 — Wire Conformal Calibration into Misdeclaration Decisions; Resolve Custody and Seal Modules)
 
 ### Server-Side Conformal Exclusion & Domain Custody / Seal Module Integration (RV2-05 MEDIUM, INV-10, FR-25, FR-29, FR-64)

@@ -93,7 +93,7 @@ def _complete_r0_and_confirm(
     )
     r_ev = client.post(
         f"/v1/returns/{return_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": f"ik-r4t1-ev-{return_id}"},
         json={
             "sha256": "a" * 64,
             "text_in_media": nonce,
@@ -163,7 +163,7 @@ def test_dispute_webhook_after_r0_confirmed_blocks_subsequent_planning_with_409_
     reviewer_token = mint_staff_token(merchant_id="merch_a", role="REVIEWER", sub="rev_01")
     r_rev = client.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-r4t1-rev-1"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",
@@ -203,7 +203,7 @@ def test_dispute_webhook_after_r0_confirmed_blocks_subsequent_planning_with_409_
     shopper_token = mint_shopper_token(order_id="ord_demo_1", shopper_id="shopper_1")
     r_ev2 = client.post(
         "/v1/returns/ret_frozen_ev/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-r4t1-ev-frozen"},
         json={
             "sha256": "b" * 64,
             "text_in_media": "NONCE-FROZEN-EV",
@@ -235,7 +235,7 @@ def test_dispute_webhook_while_r1_planned_marks_blocked_by_dispute_and_releases_
     reviewer_token = mint_staff_token(merchant_id="merch_a", role="REVIEWER", sub="rev_01")
     r_rev = client.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-r4t1-rev-before-disp"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",
@@ -323,7 +323,7 @@ def test_capture_reversed_webhook_blocks_planning_and_outbox_execution(
     reviewer_token = mint_staff_token(merchant_id="merch_a", role="REVIEWER", sub="rev_01")
     r_rev1 = client_1.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-r4t1-rev-after-rev"},
         json={"verified_grade": "B", "outcome": "CONFIRMED", "notes": "After reversal."},
     )
     assert r_rev1.status_code == 409
@@ -343,7 +343,7 @@ def test_capture_reversed_webhook_blocks_planning_and_outbox_execution(
 
     r_rev2 = client_2.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-r4t1-rev-before-rev"},
         json={"verified_grade": "B", "outcome": "CONFIRMED", "notes": "Before reversal."},
     )
     assert r_rev2.status_code == 200
@@ -402,7 +402,7 @@ def test_freeze_survives_application_restart(tmp_path: pathlib.Path) -> None:
     reviewer_token = mint_staff_token(merchant_id="merch_a", role="REVIEWER", sub="rev_01")
     r_rev = client_2.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-r4t1-rev-restart"},
         json={"verified_grade": "B", "outcome": "CONFIRMED", "notes": "Attempt after restart."},
     )
     assert r_rev.status_code == 409

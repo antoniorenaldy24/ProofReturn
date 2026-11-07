@@ -54,7 +54,7 @@ def test_aud01_real_policy_engine_calculation_on_evidence(repo: DatabaseReposito
     # Submit evidence
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-ev-aud01"},
         json={
             "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "faces_detected": 0,
@@ -104,7 +104,7 @@ def test_aud04_pydantic_validation_and_rfc9457_error_contracts(repo: DatabaseRep
     # 2. Privacy failure: unblurred face in evidence submission
     r_bad_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-ev-bad-blur"},
         json={
             "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "faces_detected": 1,
@@ -119,7 +119,7 @@ def test_aud04_pydantic_validation_and_rfc9457_error_contracts(repo: DatabaseRep
     # 3. Malformed JSON syntax
     r_malformed = client.post(
         "/v1/returns",
-        headers={"Authorization": f"Bearer {shopper_token}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Content-Type": "application/json", "Idempotency-Key": "ik-t2-ret-malformed"},
         content=b"{not valid json...",
     )
     assert r_malformed.status_code == 400
@@ -136,7 +136,7 @@ def test_aud06_zero_in_memory_state_persistence(repo: DatabaseRepository) -> Non
     # 1. Create return through API
     r_create = client1.post(
         "/v1/returns",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-ret-aud06"},
         json={"order_id": "ord_demo_1", "reason_code": "SIZE_FIT"},
     )
     assert r_create.status_code in {200, 201}
@@ -261,7 +261,7 @@ def test_rv03_dynamic_state_machine_guards(repo: DatabaseRepository) -> None:
 
     r_agent_respond = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers={"Authorization": f"Bearer {tok_agent}"},
+        headers={"Authorization": f"Bearer {tok_agent}", "Idempotency-Key": "ik-t2-ko-agent"},
         json={"action": "DECLINE"},
     )
     # Must be forbidden with 403 FORBIDDEN_ACTION
@@ -296,7 +296,7 @@ def test_rv04_keep_offer_price_consistency(repo: DatabaseRepository) -> None:
     # 2. POST respond
     r_post = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-ko-rv04"},
         json={"action": "ACCEPT"},
     )
     assert r_post.status_code == 200
@@ -390,7 +390,7 @@ def test_aud29_reviewer_independence_on_appeals(repo: DatabaseRepository) -> Non
     # 2. rev_alice attempts to decide the appeal -> 409 SAME_REVIEWER_CONFLICT
     r_conflict = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {rev1_token}"},
+        headers={"Authorization": f"Bearer {rev1_token}", "Idempotency-Key": "ik-t2-app-conflict"},
         json={"appeal_reviewer_id": "rev_alice", "outcome": "OVERTURNED"},
     )
     assert r_conflict.status_code == 409
@@ -399,7 +399,7 @@ def test_aud29_reviewer_independence_on_appeals(repo: DatabaseRepository) -> Non
     # 3. Independent rev_bob decides the appeal -> 200 OK
     r_success = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {rev2_token}"},
+        headers={"Authorization": f"Bearer {rev2_token}", "Idempotency-Key": "ik-t2-app-success"},
         json={"appeal_reviewer_id": "rev_bob", "outcome": "OVERTURNED"},
     )
     assert r_success.status_code == 200
@@ -416,7 +416,7 @@ def test_fr88_return_cancellation_endpoint(repo: DatabaseRepository) -> None:
     # 1. Create a fresh return in REQUESTED state
     r_create = client.post(
         "/v1/returns",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-ret-cancel"},
         json={"order_id": "ord_demo_1", "reason_code": "ORDERED_ACCIDENT"},
     )
     assert r_create.status_code in {200, 201}
@@ -486,20 +486,20 @@ def test_aud22_resale_order_authentication(repo: DatabaseRepository) -> None:
     # 1. Admin lists resale item
     r_list = client.post(
         "/v1/resale/listings",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin_token}", "Idempotency-Key": "ik-t2-res-list"},
         json={"passport_id": "pass_demo_1", "verified_grade": "A", "price_minor": 29900},
     )
     assert r_list.status_code == 201
     listing_id = r_list.json()["listing_id"]
 
     # 2. Unauthenticated order request rejected
-    r_unauth = client.post(f"/v1/resale/listings/{listing_id}/order")
+    r_unauth = client.post(f"/v1/resale/listings/{listing_id}/order", json={})
     assert r_unauth.status_code == 401
 
     # 3. Authenticated order request succeeds
     r_order = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t2-res-order"},
         json={"new_owner_ref": "owner_secret_ref_2"},
     )
     assert r_order.status_code in {200, 201}

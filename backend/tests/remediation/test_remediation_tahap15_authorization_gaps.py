@@ -42,7 +42,7 @@ def test_resale_order_authorization_and_ownership_transfer() -> None:
     # 1. Admin creates active resale listing
     r_list = client.post(
         "/v1/resale/listings",
-        headers={"Authorization": f"Bearer {admin_tok}"},
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": "ik-t15-list-1"},
         json={"passport_id": "pass_demo_1", "verified_grade": "A", "price_minor": 29900},
     )
     assert r_list.status_code == 201
@@ -51,7 +51,7 @@ def test_resale_order_authorization_and_ownership_transfer() -> None:
     # Negative A: Non-shopper (e.g. PACKER) forbidden from purchasing
     r_packer_buy = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {packer_tok}"},
+        headers={"Authorization": f"Bearer {packer_tok}", "Idempotency-Key": "ik-t15-buy-packer"},
         json={"new_owner_ref": "rogue_owner"},
     )
     assert r_packer_buy.status_code == 403
@@ -76,7 +76,7 @@ def test_resale_order_authorization_and_ownership_transfer() -> None:
     nocap_shopper_tok = mint_shopper_token(uncaptured_order_id, "shopper_1")
     r_nocap_buy = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {nocap_shopper_tok}"},
+        headers={"Authorization": f"Bearer {nocap_shopper_tok}", "Idempotency-Key": "ik-t15-buy-nocap"},
         json={"new_owner_ref": "rogue_owner"},
     )
     assert r_nocap_buy.status_code in {402, 409}
@@ -84,7 +84,7 @@ def test_resale_order_authorization_and_ownership_transfer() -> None:
     # Positive: Valid shopper with captured order succeeds, but body new_owner_ref is ignored
     r_valid_buy = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": "ik-t15-buy-valid"},
         json={"new_owner_ref": "spoofed_body_owner_ref"},
     )
     assert r_valid_buy.status_code == 200
@@ -202,7 +202,7 @@ def test_appeals_original_reviewer_id_strictly_from_db() -> None:
     # Enforce independent reviewer constraint: rev_01 must be blocked from deciding the appeal
     r_same_decide = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {reviewer_1_tok}"},
+        headers={"Authorization": f"Bearer {reviewer_1_tok}", "Idempotency-Key": "ik-t15-app-same"},
         json={"appeal_reviewer_id": "rev_01", "outcome": "OVERTURNED"},
     )
     assert r_same_decide.status_code == 409
@@ -211,7 +211,7 @@ def test_appeals_original_reviewer_id_strictly_from_db() -> None:
     # Independent rev_02 succeeds
     r_diff_decide = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {reviewer_2_tok}"},
+        headers={"Authorization": f"Bearer {reviewer_2_tok}", "Idempotency-Key": "ik-t15-app-diff"},
         json={"appeal_reviewer_id": "rev_02", "outcome": "OVERTURNED"},
     )
     assert r_diff_decide.status_code == 200

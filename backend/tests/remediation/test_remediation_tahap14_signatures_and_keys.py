@@ -41,7 +41,7 @@ def test_tampered_passport_event_makes_chain_invalid() -> None:
     # 1. Mint a valid passport
     mint_resp = client.post(
         "/v1/passports",
-        headers={"Authorization": f"Bearer {packer_token}"},
+        headers={"Authorization": f"Bearer {packer_token}", "Idempotency-Key": f"ik-t14-mint-{pid}"},
         json={
             "passport_id": pid,
             "sku": "PR-HP-XM5",
@@ -94,7 +94,7 @@ def test_signature_with_wrong_key_is_rejected() -> None:
     # 1. Mint a valid passport
     mint_resp = client.post(
         "/v1/passports",
-        headers={"Authorization": f"Bearer {packer_token}"},
+        headers={"Authorization": f"Bearer {packer_token}", "Idempotency-Key": f"ik-t14-mint-{pid}"},
         json={
             "passport_id": pid,
             "sku": "PR-HP-XM5",

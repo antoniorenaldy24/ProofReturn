@@ -46,7 +46,7 @@ def test_aud05_api_enforces_return_state_machine_guard() -> None:
     # 2. Evidence moves DECLARED to ASSESSED
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-f3-ev-1"},
         json={"kind": "VIDEO_CHALLENGE", "sha256": "0" * 64},
     )
     assert r_ev.status_code == 200
@@ -54,7 +54,7 @@ def test_aud05_api_enforces_return_state_machine_guard() -> None:
     # 3. Accept keep-offer moves ASSESSED to KEEP_ACCEPTED
     r_keep = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-f3-keep-1"},
         json={"action": "ACCEPT"},
     )
     assert r_keep.status_code == 200

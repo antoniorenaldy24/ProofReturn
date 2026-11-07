@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from backend.api.errors import ErrorCode
 from backend.observability.logger import scrub_sensitive_log
 from backend.observability.metrics import MetricsRegistry, format_structured_log
 
@@ -237,8 +238,8 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                         "title": "Too Many Requests",
                         "status": 429,
                         "detail": f"Rate limit exceeded ({self.requests_per_minute} req/min). Retry after {retry_after}s.",
-                        "code": "RATE_LIMIT_EXCEEDED",
-                        "error_code": "RATE_LIMIT_EXCEEDED",
+                        "code": ErrorCode.RATE_LIMIT_EXCEEDED,
+                        "error_code": ErrorCode.RATE_LIMIT_EXCEEDED,
                         "instance": request.url.path,
                     },
                     headers={
@@ -288,8 +289,8 @@ class RequestBodyLimitMiddleware(BaseHTTPMiddleware):
                             "title": "Payload Too Large",
                             "status": 413,
                             "detail": f"Request body size {content_length} bytes exceeds maximum limit of {self.max_body_bytes} bytes.",
-                            "code": "PAYLOAD_TOO_LARGE",
-                            "error_code": "PAYLOAD_TOO_LARGE",
+                            "code": ErrorCode.PAYLOAD_TOO_LARGE,
+                            "error_code": ErrorCode.PAYLOAD_TOO_LARGE,
                             "instance": request.url.path,
                         },
                         headers={"Content-Type": "application/problem+json"},

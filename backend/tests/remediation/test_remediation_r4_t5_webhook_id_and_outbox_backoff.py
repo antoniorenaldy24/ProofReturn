@@ -111,7 +111,7 @@ def _plan_r0_via_api(client: TestClient, repo: DatabaseRepository, return_id: st
     )
     r_ev = client.post(
         f"/v1/returns/{return_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": f"ik-r4t5-ev-{return_id}"},
         json={
             "sha256": "e" * 64,
             "text_in_media": nonce,

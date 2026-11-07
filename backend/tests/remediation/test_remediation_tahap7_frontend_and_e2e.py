@@ -79,7 +79,7 @@ def test_frontend_api_client_shopper_journey_e2e(repo: DatabaseRepository) -> No
     # 4. Submit Evidence (Photo capture with privacy blur guard)
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers=auth_header,
+        headers={**auth_header, "Idempotency-Key": "ik-t7-fe-ev-1"},
         json={
             "sha256": "e" * 64,
             "faces_detected": 0,
@@ -148,7 +148,7 @@ def test_frontend_api_client_keep_offer_acceptance_flow(repo: DatabaseRepository
     # Submit evidence so return reaches ASSESSED (Task T6 / RV-03: keep-offer ACCEPT only from ASSESSED)
     client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers=auth_header,
+        headers={**auth_header, "Idempotency-Key": "ik-t7-fe-ev-2"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -163,7 +163,7 @@ def test_frontend_api_client_keep_offer_acceptance_flow(repo: DatabaseRepository
     # Accept Keep Offer
     r_resp = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers=auth_header,
+        headers={**auth_header, "Idempotency-Key": "ik-t7-fe-ko-1"},
         json={"action": "ACCEPT"},
     )
     assert r_resp.status_code == 200
@@ -272,7 +272,7 @@ def test_e2e_staging_smoke_run_full_lifecycle(repo: DatabaseRepository) -> None:
     # 3. Create Return
     r_create = client.post(
         "/v1/returns",
-        headers=shopper_auth,
+        headers={**shopper_auth, "Idempotency-Key": "ik-t7-smoke-create-1"},
         json={"order_id": order_id, "order_item_id": "item_staging_1", "reason_code": "CHANGED_MIND"},
     )
     assert r_create.status_code == 200
@@ -296,7 +296,7 @@ def test_e2e_staging_smoke_run_full_lifecycle(repo: DatabaseRepository) -> None:
     assert created_ret is not None
     r_ev = client.post(
         f"/v1/returns/{ret_id}/evidence",
-        headers=shopper_auth,
+        headers={**shopper_auth, "Idempotency-Key": "ik-t7-smoke-ev-1"},
         json={
             "sha256": "f" * 64,
             "faces_detected": 0,

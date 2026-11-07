@@ -161,7 +161,7 @@ def test_contract_scenario_1_trusted_declared_b() -> None:
     shopper_tok = mint_shopper_token(order_id, shopper_id)
     resp_ev = client.post(
         f"/v1/returns/{ret_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": f"ik-t16-ev-{ret_id}"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": f"raw/{ret_id}/challenge.mp4",
@@ -275,7 +275,7 @@ def test_contract_scenario_2_established_declared_a() -> None:
     shopper_tok = mint_shopper_token(order_id, shopper_id)
     resp_ev = client.post(
         f"/v1/returns/{ret_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": f"ik-t16-ev-{ret_id}"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": f"raw/{ret_id}/challenge.mp4",
@@ -389,7 +389,7 @@ def test_contract_scenario_3_new_declared_b() -> None:
     shopper_tok = mint_shopper_token(order_id, shopper_id)
     resp_ev = client.post(
         f"/v1/returns/{ret_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": f"ik-t16-ev-{ret_id}"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": f"raw/{ret_id}/challenge.mp4",

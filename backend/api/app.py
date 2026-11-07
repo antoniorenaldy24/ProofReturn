@@ -24,11 +24,12 @@ from datetime import UTC, datetime, timedelta, timezone
 from fractions import Fraction
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Body, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from backend.api.errors import ALL_ERROR_CODES, ErrorCode
 from backend.api.middleware import (
     ObservabilityMiddleware,
     RateLimiterMiddleware,
@@ -51,6 +52,7 @@ from backend.api.schemas import (
     KeepOfferRespondRequest,
     MintPassportRequest,
     OrderPassportRequest,
+    PayPalWebhookEventRequest,
     PrivacyDeletionRequest,
     PurchaseResaleListingRequest,
     ReceivingCheckpointRequest,
@@ -167,7 +169,7 @@ def _resolve_principal(
     """Validate Bearer token cryptographically and resolve verified Principal (API-04, AUD-21)."""
     if not auth_header or not auth_header.startswith("Bearer "):
         if required:
-            return None, _problem(401, "AUTH_REQUIRED", "Unauthorized", "Authentication required.")
+            return None, _problem(401, ErrorCode.AUTH_REQUIRED, "Unauthorized", "Authentication required.")
         return None, None
 
     raw = auth_header.removeprefix("Bearer ").strip()
@@ -175,9 +177,9 @@ def _resolve_principal(
         principal = verify_token(raw)
         return principal, None
     except TokenExpiredError as exc:
-        return None, _problem(401, "AUTH_EXPIRED", "Unauthorized", str(exc))
+        return None, _problem(401, ErrorCode.AUTH_EXPIRED, "Unauthorized", str(exc))
     except (InvalidTokenSignatureError, MalformedTokenError, AuthenticationError) as exc:
-        return None, _problem(401, "AUTH_REQUIRED", "Unauthorized", f"Authentication failed: {exc}")
+        return None, _problem(401, ErrorCode.AUTH_REQUIRED, "Unauthorized", f"Authentication failed: {exc}")
 
 
 def _is_loopback_client(request: Request) -> bool:
@@ -366,16 +368,167 @@ def create_app(
     app.state.automation_scheduler = automation_scheduler
     app.state.alert_scheduler = alert_scheduler
 
+    async def _require_idempotency(
+        request: Request,
+        endpoint_scope: str,
+        principal: Principal,
+        idempotency_key: str | None,
+    ) -> tuple[str | None, str | None, JSONResponse | None]:
+        """Enforce required Idempotency-Key and check replay/conflict cache (RV3-08, API-06)."""
+        if not idempotency_key or not idempotency_key.strip():
+            return (
+                None,
+                None,
+                _problem(
+                    400,
+                    ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
+                    "Bad Request",
+                    "Idempotency-Key header is required for this mutating endpoint (API-06, RV3-08).",
+                ),
+            )
+        raw_bytes = await request.body()
+        body_hash = hashlib.sha256(raw_bytes).hexdigest()
+        cache_key = (
+            f"POST:{endpoint_scope}:{principal.merchant_id}:{principal.sub}:{idempotency_key.strip()}"
+        )
+        if cache_key in idempotency_cache:
+            prev_hash, prev_status, prev_resp = idempotency_cache[cache_key]
+            if prev_hash != body_hash:
+                return (
+                    None,
+                    None,
+                    _problem(
+                        409,
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        "Conflict",
+                        "Idempotency-Key reused with a different request payload.",
+                    ),
+                )
+            return None, None, JSONResponse(status_code=prev_status, content=prev_resp)
+        return cache_key, body_hash, None
+
     # RFC 9457 Validation Error Handlers (AUD-04, J-08)
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        path = request.url.path
+
+        # 1. Demo-mode disabled route checks take precedence before body validation
+        if not is_demo:
+            if path == "/v1/auth/staff-token":
+                return _problem(
+                    404,
+                    ErrorCode.ENDPOINT_NOT_FOUND,
+                    "Not Found",
+                    "Staff token issuance endpoint is disabled outside demo mode (RV2-01).",
+                )
+            if path in {"/v1/carrier-events", "/v1/demo/clock/advance", "/v1/demo/reset"}:
+                return _problem(
+                    404,
+                    ErrorCode.RESOURCE_NOT_FOUND,
+                    "Not Found",
+                    f"Endpoint {path} is disabled when DEMO_MODE=false.",
+                )
+
+        # 2. Demo bootstrap key checks on auth endpoints
+        if is_demo and path in {"/v1/auth/staff-token", "/v1/auth/shopper-magic-link"}:
+            bootstrap_header = (
+                request.headers.get("X-Demo-Bootstrap-Key")
+                or request.headers.get("x-demo-bootstrap-key")
+            )
+            expected_bootstrap = resolved_settings.demo_bootstrap_key.get_secret_value()
+            if (
+                not bootstrap_header
+                or not expected_bootstrap
+                or not hmac.compare_digest(bootstrap_header.strip(), expected_bootstrap.strip())
+            ):
+                return _problem(
+                    401,
+                    ErrorCode.AUTH_REQUIRED,
+                    "Unauthorized",
+                    "Valid X-Demo-Bootstrap-Key header required in demo mode (RV2-01).",
+                )
+
+        # 3. Authentication & role/scope checks on protected endpoints
+        public_paths = {
+            "/v1/health",
+            "/v1/ready",
+            "/v1/keys",
+            "/v1/auth/staff-token",
+            "/v1/auth/shopper-magic-link",
+            "/v1/webhooks/paypal",
+        }
+        if path not in public_paths:
+            principal, err = _resolve_principal(request.headers.get("authorization"), required=True)
+            if err:
+                return err
+            if principal:
+                if path.endswith("/evidence") and principal.is_agent:
+                    return _problem(
+                        403,
+                        ErrorCode.AGENT_EVIDENCE_FORBIDDEN,
+                        "Forbidden",
+                        "AI agent tokens cannot submit physical return evidence (INV-12).",
+                    )
+                if path.startswith("/v1/receiving/") and not (
+                    principal.is_staff and principal.role in {"RECEIVER", "PACKER", "MERCHANT_ADMIN"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires RECEIVER or PACKER role.")
+                if path.startswith("/v1/review/") and not (
+                    principal.is_staff and principal.role in {"REVIEWER", "MERCHANT_ADMIN"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires REVIEWER role.")
+                if path.startswith("/v1/audits/") and not (
+                    principal.is_staff and principal.role in {"RECEIVER", "REVIEWER", "MERCHANT_ADMIN"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires RECEIVER or REVIEWER role.")
+                if path == "/v1/policies" and not (
+                    principal.is_staff and principal.role == "MERCHANT_ADMIN"
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only MERCHANT_ADMIN may create policies (AZ-04).")
+                if path == "/v1/resale/listings" and not (
+                    principal.is_staff and principal.role in {"MERCHANT_OPERATOR", "MERCHANT_ADMIN"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_OPERATOR or MERCHANT_ADMIN role.")
+                if (path == "/v1/passports" or path.endswith("/passport")) and not (
+                    principal.is_staff and principal.role in {"PACKER", "MERCHANT_ADMIN"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires PACKER or MERCHANT_ADMIN role.")
+                if path == "/v1/simulate" and not (
+                    principal.is_staff and principal.role in {"MERCHANT_ADMIN", "MERCHANT_OPERATOR"}
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_ADMIN or MERCHANT_OPERATOR role.")
+                if path == "/v1/carrier-events" and not (
+                    principal.is_service
+                    or (
+                        principal.is_staff
+                        and principal.role in {"RECEIVER", "MERCHANT_OPERATOR", "MERCHANT_ADMIN"}
+                    )
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires carrier service or staff role.")
+                if path == "/v1/demo/clock/advance" and not (
+                    principal.is_staff and principal.role == "MERCHANT_ADMIN"
+                ):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_ADMIN role.")
+                if path == "/v1/returns" and not (principal.is_shopper or principal.is_agent):
+                    return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only shoppers or authorized agents may create returns.")
+                if path.startswith("/v1/returns/") and (principal.is_shopper or principal.is_agent):
+                    parts = path.split("/")
+                    if len(parts) >= 4:
+                        ret_obj = repo.get_return(parts[3])
+                        if not ret_obj or ret_obj.order_id != principal.order_id:
+                            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
+
+        # 4. Malformed JSON syntax -> 400 MALFORMED_JSON
+        if any(err_item.get("type") == "json_invalid" for err_item in exc.errors()):
+            return _problem(400, ErrorCode.MALFORMED_JSON, "Bad Request", "Malformed JSON request body.")
+
         error_details = []
         for err in exc.errors():
             loc = ".".join(str(p) for p in err.get("loc", []))
             msg = err.get("msg", "Validation error")
             error_details.append(f"{loc}: {msg}")
         joined = "; ".join(error_details) if error_details else "Invalid request body."
-        return _problem(422, "VALIDATION_FAILED", "Unprocessable Entity", joined)
+        return _problem(422, ErrorCode.VALIDATION_FAILED, "Unprocessable Entity", joined)
 
     @app.exception_handler(ValidationError)
     async def pydantic_validation_exception_handler(_request: Request, exc: ValidationError) -> JSONResponse:
@@ -385,11 +538,11 @@ def create_app(
             msg = err.get("msg", "Validation error")
             error_details.append(f"{loc}: {msg}")
         joined = "; ".join(error_details) if error_details else "Validation failed."
-        return _problem(422, "VALIDATION_FAILED", "Unprocessable Entity", joined)
+        return _problem(422, ErrorCode.VALIDATION_FAILED, "Unprocessable Entity", joined)
 
     @app.exception_handler(json.JSONDecodeError)
     async def json_decode_exception_handler(_request: Request, exc: json.JSONDecodeError) -> JSONResponse:
-        return _problem(400, "MALFORMED_JSON", "Bad Request", f"Malformed JSON: {exc}")
+        return _problem(400, ErrorCode.MALFORMED_JSON, "Bad Request", f"Malformed JSON: {exc}")
 
     # =========================================================================
     # Health, Readiness, Metrics & Ops Alerts (AUD-37, RV-11)
@@ -434,7 +587,7 @@ def create_app(
             if err:
                 return err
             if not principal.is_staff:
-                return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only staff may access metrics remotely.")
+                return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only staff may access metrics remotely.")
         return Response(content=global_metrics.to_prometheus_text(), media_type="text/plain; version=0.0.4")
 
     @app.get("/v1/ops/alerts")
@@ -445,7 +598,7 @@ def create_app(
             if err:
                 return err
             if not principal.is_staff:
-                return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only staff may access alerts remotely.")
+                return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only staff may access alerts remotely.")
         needs_attention_actions = repo.list_refund_actions_by_status("NEEDS_ATTENTION")
         if needs_attention_actions:
             global_metrics.set_gauge("outbox_needs_attention_count", float(len(needs_attention_actions)))
@@ -483,7 +636,7 @@ def create_app(
         if err:
             return err
         if not principal or not principal.is_staff or principal.role != "MERCHANT_ADMIN":
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only MERCHANT_ADMIN can trigger outbox executor.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only MERCHANT_ADMIN can trigger outbox executor.")
         effective_now = datetime.now(UTC) + timedelta(seconds=clock_offset_seconds)
         result = outbox_executor.run_once(
             limit=limit,
@@ -497,27 +650,24 @@ def create_app(
     # =========================================================================
     @app.post("/v1/agent/tokens")
     async def issue_agent_token(
-        request: Request,
+        req_body: IssueAgentTokenRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_shopper:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only shoppers may issue agent tokens.")
-
-        body_dict = await request.json()
-        req_body = IssueAgentTokenRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only shoppers may issue agent tokens.")
 
         order_id = req_body.order_id
         if order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order out of scope for shopper.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order out of scope for shopper.")
 
         requested_set = set(req_body.scopes)
         if not requested_set.issubset(ALLOWED_AGENT_SCOPES):
             return _problem(
                 422,
-                "VALIDATION_FAILED",
+                ErrorCode.VALIDATION_FAILED,
                 "Unprocessable Entity",
                 f"Invalid or forbidden scopes requested: {requested_set - ALLOWED_AGENT_SCOPES}",
             )
@@ -567,12 +717,15 @@ def create_app(
     # Staff & Shopper Identity Minting Endpoints (RV-09, API-04, RV2-01)
     # =========================================================================
     @app.post("/v1/auth/staff-token")
-    async def issue_staff_token(request: Request) -> JSONResponse:
+    async def issue_staff_token(
+        request: Request,
+        req_body: IssueStaffTokenRequest,
+    ) -> JSONResponse:
         """Issue authenticated staff JWT for merchant operators, admins, reviewers, packers (RV-09, API-04, RV2-01)."""
         if not is_demo:
             return _problem(
                 404,
-                "ENDPOINT_NOT_FOUND",
+                ErrorCode.ENDPOINT_NOT_FOUND,
                 "Not Found",
                 "Staff token issuance endpoint is disabled outside demo mode (RV2-01).",
             )
@@ -582,22 +735,19 @@ def create_app(
         if not bootstrap_header or not expected_bootstrap or not hmac.compare_digest(bootstrap_header.strip(), expected_bootstrap.strip()):
             return _problem(
                 401,
-                "AUTH_REQUIRED",
+                ErrorCode.AUTH_REQUIRED,
                 "Unauthorized",
                 "Valid X-Demo-Bootstrap-Key header required in demo mode (RV2-01).",
             )
 
-        body_dict = await request.json()
-        req_body = IssueStaffTokenRequest.model_validate(body_dict)
-
         merchant = repo.get_merchant(req_body.merchant_id)
         if not merchant and not is_demo:
-            return _problem(404, "MERCHANT_NOT_FOUND", "Not Found", f"Merchant '{req_body.merchant_id}' does not exist.")
+            return _problem(404, ErrorCode.MERCHANT_NOT_FOUND, "Not Found", f"Merchant '{req_body.merchant_id}' does not exist.")
 
         valid_roles = {"MERCHANT_ADMIN", "MERCHANT_OPERATOR", "PACKER", "RECEIVER", "REVIEWER"}
         role_upper = req_body.role.upper()
         if role_upper not in valid_roles:
-            return _problem(422, "INVALID_ROLE", "Unprocessable Entity", f"Role must be one of {valid_roles}")
+            return _problem(422, ErrorCode.INVALID_ROLE, "Unprocessable Entity", f"Role must be one of {valid_roles}")
 
         effective_ttl = min(req_body.ttl_seconds, 8 * 3600) if req_body.ttl_seconds else 8 * 3600
         token = mint_staff_token(
@@ -620,15 +770,15 @@ def create_app(
         )
 
     @app.post("/v1/auth/shopper-magic-link")
-    async def issue_shopper_magic_link(request: Request) -> JSONResponse:
+    async def issue_shopper_magic_link(
+        request: Request,
+        req_body: IssueShopperMagicLinkRequest,
+    ) -> JSONResponse:
         """Generate order-scoped magic link token for shopper return flow (RV-09, API-04, RV2-01)."""
-        body_dict = await request.json()
-        req_body = IssueShopperMagicLinkRequest.model_validate(body_dict)
-
         if not is_demo:
             order = repo.get_order(req_body.order_id)
             if not order:
-                return _problem(404, "ORDER_NOT_FOUND", "Not Found", f"Order '{req_body.order_id}' does not exist.")
+                return _problem(404, ErrorCode.ORDER_NOT_FOUND, "Not Found", f"Order '{req_body.order_id}' does not exist.")
             # Record delivery request without token (RV2-01: never return token or magic_link_url in response)
             return JSONResponse(
                 status_code=202,
@@ -644,14 +794,14 @@ def create_app(
         if not bootstrap_header or not expected_bootstrap or not hmac.compare_digest(bootstrap_header.strip(), expected_bootstrap.strip()):
             return _problem(
                 401,
-                "AUTH_REQUIRED",
+                ErrorCode.AUTH_REQUIRED,
                 "Unauthorized",
                 "Valid X-Demo-Bootstrap-Key header required in demo mode (RV2-01).",
             )
 
         order = repo.get_order(req_body.order_id)
         if not order and not is_demo:
-            return _problem(404, "ORDER_NOT_FOUND", "Not Found", f"Order '{req_body.order_id}' does not exist.")
+            return _problem(404, ErrorCode.ORDER_NOT_FOUND, "Not Found", f"Order '{req_body.order_id}' does not exist.")
 
         merchant_id = order.merchant_id if order else "merch_a"
         shopper_id = req_body.shopper_id or (order.account_id if order else "shopper_1")
@@ -690,15 +840,15 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         # AZ-01: Tenant isolation -> 404 on cross-merchant access (TZ-04)
         if principal.is_staff and ret.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         # AZ-02 / AZ-06: Shopper & Agent scoped to own order
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         return JSONResponse(
             status_code=200,
@@ -719,6 +869,7 @@ def create_app(
     @app.post("/v1/returns")
     async def create_return(
         request: Request,
+        req_body: CreateReturnRequest,
         authorization: str | None = Header(default=None),
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
@@ -727,36 +878,24 @@ def create_app(
             return err
 
         if not (principal.is_shopper or principal.is_agent):
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only shoppers or authorized agents may create returns.")
-
-        raw_bytes = await request.body()
-        body_hash = hashlib.sha256(raw_bytes).hexdigest()
-        body_dict = json.loads(raw_bytes.decode("utf-8"))
-        req_body = CreateReturnRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only shoppers or authorized agents may create returns.")
 
         order_id = req_body.order_id
         if order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found or out of scope.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found or out of scope.")
 
         if principal.is_agent and "declare" not in principal.scopes:
-            return _problem(403, "FORBIDDEN_ACTION", "Forbidden", "Agent token missing declare scope.")
+            return _problem(403, ErrorCode.FORBIDDEN_ACTION, "Forbidden", "Agent token missing declare scope.")
 
         order = repo.get_order(order_id)
         if not order:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found in repository.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found in repository.")
 
-        if idempotency_key:
-            cache_key = f"POST:/v1/returns:{principal.merchant_id}:{principal.sub}:{idempotency_key}"
-            if cache_key in idempotency_cache:
-                prev_hash, prev_status, prev_resp = idempotency_cache[cache_key]
-                if prev_hash != body_hash:
-                    return _problem(
-                        409,
-                        "IDEMPOTENCY_CONFLICT",
-                        "Conflict",
-                        "Idempotency-Key reused with a different request payload.",
-                    )
-                return JSONResponse(status_code=prev_status, content=prev_resp)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, "/v1/returns", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         # Generate unique return with CSPRNG seed (RV-02) and persist to database (AUD-06)
         return_id = f"ret_{uuid.uuid4().hex[:10]}"
@@ -813,7 +952,7 @@ def create_app(
             "order_id": order_id,
             "state": "REQUESTED",
         }
-        if idempotency_key:
+        if cache_key and body_hash:
             idempotency_cache[cache_key] = (body_hash, 200, resp_payload)
 
         return JSONResponse(status_code=200, content=resp_payload)
@@ -830,16 +969,16 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found or out of scope.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found or out of scope.")
 
         try:
             repo.apply_return_transition(return_id, "CANCEL_RETURN")
             return JSONResponse(status_code=200, content={"return_id": return_id, "state": "CANCELLED"})
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
     @app.get("/v1/orders/{order_id}/policy")
     def get_order_policy(order_id: str, authorization: str | None = Header(default=None)) -> JSONResponse:
@@ -849,21 +988,21 @@ def create_app(
 
         order = repo.get_order(order_id)
         if not order:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found.")
 
         # AZ-01: Staff must match merchant
         if principal.is_staff and order.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found.")
 
         # AZ-02: Shopper & Agent scoped to order
         if principal.is_shopper and order.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found.")
 
         if principal.is_agent:
             if order.order_id != principal.order_id:
-                return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found.")
+                return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found.")
             if "read_policy" not in principal.scopes:
-                return _problem(403, "FORBIDDEN_ACTION", "Forbidden", "Agent token missing read_policy scope.")
+                return _problem(403, ErrorCode.FORBIDDEN_ACTION, "Forbidden", "Agent token missing read_policy scope.")
 
         pol = repo.get_policy(order.policy_version)
         default_curve = {"A": 1.0, "B": 0.95, "C": 0.80, "D": 0.50}
@@ -888,16 +1027,16 @@ def create_app(
         if principal.is_agent:
             return _problem(
                 403,
-                "AGENT_EVIDENCE_FORBIDDEN",
+                ErrorCode.AGENT_EVIDENCE_FORBIDDEN,
                 "Forbidden",
                 "AI agent tokens cannot request or submit physical return evidence (INV-12).",
             )
         if principal.is_staff:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only human shoppers may request challenge.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only human shoppers may request challenge.")
 
         ret = repo.get_return(return_id)
         if not ret or ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         # Nonce stored on Return in database (eliminate hardcoded nonce, AUD-01)
         if not ret.challenge_nonce:
@@ -912,7 +1051,7 @@ def create_app(
     @app.post("/v1/returns/{return_id}/declaration")
     async def submit_return_declaration(
         return_id: str,
-        request: Request,
+        req_body: ReturnDeclarationRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
@@ -921,19 +1060,22 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if not (principal.is_shopper or principal.is_agent) or ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found or out of scope.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found or out of scope.")
 
         if principal.is_agent and "declare" not in principal.scopes:
-            return _problem(403, "FORBIDDEN_ACTION", "Forbidden", "Agent token missing declare scope.")
+            return _problem(403, ErrorCode.FORBIDDEN_ACTION, "Forbidden", "Agent token missing declare scope.")
 
-        body_dict = await request.json()
-        try:
-            req_body = ReturnDeclarationRequest.model_validate(body_dict)
-        except ValueError as exc:
-            return _problem(400, "TERMS_NOT_ACCEPTED", "Bad Request", str(exc))
+        consent_recorded = bool(req_body.consent_fast_lane_terms or req_body.fast_lane_terms_accepted)
+        if not consent_recorded:
+            return _problem(
+                400,
+                ErrorCode.TERMS_NOT_ACCEPTED,
+                "Bad Request",
+                "Fast Lane terms must be explicitly accepted (FR-14, INV-06).",
+            )
 
         shopper_nonce = req_body.shopper_nonce or req_body.nonce_shopper or secrets.token_hex(16)
         actor = req_body.actor or {"kind": principal.type, "sub": principal.sub}
@@ -946,7 +1088,6 @@ def create_app(
         order_created = order.created_at.replace(tzinfo=timezone.utc) if (order and order.created_at) else now_utc
         within_window = (now_utc - order_created).days <= return_window_days
         authorized = not err and bool((principal.is_shopper or principal.is_agent) and ret.order_id == principal.order_id)
-        consent_recorded = bool(req_body.consent_fast_lane_terms or req_body.fast_lane_terms_accepted)
 
         try:
             if ret.state == "REQUESTED":
@@ -973,7 +1114,7 @@ def create_app(
             ret.consent_recorded = True
             repo.save_return(ret)
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         decl_response = {
             "return_id": return_id,
@@ -994,7 +1135,9 @@ def create_app(
     async def submit_return_evidence(
         return_id: str,
         request: Request,
+        req_body: EvidenceSubmissionRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
@@ -1004,20 +1147,20 @@ def create_app(
         if principal.is_agent:
             return _problem(
                 403,
-                "AGENT_EVIDENCE_FORBIDDEN",
+                ErrorCode.AGENT_EVIDENCE_FORBIDDEN,
                 "Forbidden",
                 "AI agent tokens cannot submit physical return evidence (INV-12).",
             )
 
         ret = repo.get_return(return_id)
         if not ret or not principal.is_shopper or ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
-        body_dict = await request.json()
-        try:
-            req_body = EvidenceSubmissionRequest.model_validate(body_dict)
-        except Exception as exc:
-            return _problem(422, "VALIDATION_FAILED", "Unprocessable Entity", str(exc))
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/returns/{return_id}/evidence", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         from backend.ops.drills import verify_client_side_face_blur
 
@@ -1027,14 +1170,26 @@ def create_app(
             blur_latency_ms=req_body.blur_latency_ms,
         )
         if not blur_check.accepted:
-            return _problem(422, blur_check.reason, "Unprocessable Entity", "Privacy face-blur verification failed (FR-16).")
+            if blur_check.reason == ErrorCode.BLUR_BUDGET_EXCEEDED_50MS:
+                return _problem(
+                    422,
+                    ErrorCode.BLUR_BUDGET_EXCEEDED_50MS,
+                    "Unprocessable Entity",
+                    "Privacy face-blur verification failed (FR-16).",
+                )
+            return _problem(
+                422,
+                ErrorCode.UNBLURRED_FACE_REJECTED,
+                "Unprocessable Entity",
+                "Privacy face-blur verification failed (FR-16).",
+            )
 
         # FR-66: Verify retakes within limits (max 3 per step, 8 per return)
         retakes_ok = (ret.retake_count <= 3)
         if not retakes_ok:
             return _problem(
                 409,
-                "INVALID_STATE_TRANSITION",
+                ErrorCode.INVALID_STATE_TRANSITION,
                 "Conflict",
                 "Maximum evidence retake attempts exceeded (FR-66).",
             )
@@ -1049,7 +1204,7 @@ def create_app(
             if not challenge_valid:
                 return _problem(
                     409,
-                    "INVALID_STATE_TRANSITION",
+                    ErrorCode.INVALID_STATE_TRANSITION,
                     "Conflict",
                     "Challenge nonce mismatch between evidence and stored session nonce (FR-65).",
                 )
@@ -1138,7 +1293,7 @@ def create_app(
             )
             release_dec = decide_release(release_inp, policy_cfg, calib_cfg)
         except JurisdictionCapViolationError as exc:
-            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.JURISDICTION_CAP_VIOLATION, "Conflict", str(exc))
 
         # AUD-15 & INV-18: Connect failure detection / degraded mode fallback (§31.3)
         fb_code = request.headers.get("x-fallback-degradation")
@@ -1212,13 +1367,13 @@ def create_app(
                 challenge_not_verified=challenge_not_verified,
             )
         except MissingCaptureError as exc:
-            return _problem(409, "CAPTURE_MISSING", "Capture Missing", str(exc))
+            return _problem(409, ErrorCode.CAPTURE_MISSING, "Capture Missing", str(exc))
         except OrderFrozenError as exc:
-            return _problem(409, "ORDER_FROZEN", "Order Frozen", str(exc))
+            return _problem(409, ErrorCode.ORDER_FROZEN, "Order Frozen", str(exc))
         except OverRefundError as exc:
-            return _problem(409, "REFUND_LIMIT_EXCEEDED", "Refund Limit Exceeded", str(exc))
+            return _problem(409, ErrorCode.REFUND_LIMIT_EXCEEDED, "Refund Limit Exceeded", str(exc))
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         # Rehydrate into in-memory ledger cache if action planned
         if r0_action and order and order.capture_id:
@@ -1257,12 +1412,14 @@ def create_app(
         }
         if not challenge_valid:
             resp_content["reason"] = "CHALLENGE_NOT_VERIFIED"
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
         return JSONResponse(status_code=200, content=resp_content)
 
     @app.post("/v1/returns/{return_id}/dropoff")
     async def record_return_dropoff(
         return_id: str,
-        request: Request,
+        req_body: DropoffRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
@@ -1271,17 +1428,14 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret or not principal.is_shopper or ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
-
-        body_dict = await request.json()
-        req_body = DropoffRequest.model_validate(body_dict)
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         # Dynamic exposure cap guard from database (RV-03, RV3-03, R4-T3: fail-closed)
         merchant = repo.get_merchant(ret.merchant_id)
         if not merchant:
             return _problem(
                 409,
-                "MERCHANT_NOT_FOUND",
+                ErrorCode.MERCHANT_NOT_FOUND,
                 "Conflict",
                 f"Merchant record '{ret.merchant_id}' not found.",
             )
@@ -1298,7 +1452,7 @@ def create_app(
             elif ret.state == "APPROVED":
                 repo.apply_return_transition(return_id, "ISSUE_LABEL")
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         ret_updated = repo.get_return(return_id) or ret
         # R4-T7 (RV2-05 MEDIUM, FR-64): Use domain/return_seal.py ReturnSealRecord
@@ -1345,12 +1499,12 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if principal.is_staff and ret.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         shopper_nonce = ret.shopper_nonce or "shopper_nonce_default"
 
@@ -1423,12 +1577,12 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if principal.is_staff and ret.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         # Real DB entity references (AUD-01)
         decision = repo.get_latest_decision(return_id)
@@ -1509,17 +1663,17 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if principal.is_agent and "keep_offer" not in principal.scopes:
-            return _problem(403, "FORBIDDEN_ACTION", "Forbidden", "Agent token missing keep_offer scope.")
+            return _problem(403, ErrorCode.FORBIDDEN_ACTION, "Forbidden", "Agent token missing keep_offer scope.")
 
         offer = _get_or_compute_keep_offer(ret)
         if offer is None:
-            return _problem(404, "NO_KEEP_OFFER", "Not Found", "No keep-offer available for this return.")
+            return _problem(404, ErrorCode.NO_KEEP_OFFER, "Not Found", "No keep-offer available for this return.")
 
         return JSONResponse(
             status_code=200,
@@ -1539,7 +1693,9 @@ def create_app(
     async def respond_keep_offer(
         return_id: str,
         request: Request,
+        req_body: KeepOfferRespondRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
@@ -1547,23 +1703,27 @@ def create_app(
 
         ret = repo.get_return(return_id)
         if not ret:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if (principal.is_shopper or principal.is_agent) and ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
         if principal.is_agent and "keep_offer" not in principal.scopes:
-            return _problem(403, "FORBIDDEN_ACTION", "Forbidden", "Agent token missing keep_offer scope.")
+            return _problem(403, ErrorCode.FORBIDDEN_ACTION, "Forbidden", "Agent token missing keep_offer scope.")
 
-        body_dict = await request.json()
-        req_body = KeepOfferRespondRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/returns/{return_id}/keep-offer/respond", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
+
         action = req_body.action.upper()
 
         # Agent tokens cannot trigger physical return approval bypassing evidence (INV-12, RV-03)
         if principal.is_agent and action != "ACCEPT" and ret.state in {"REQUESTED", "DECLARED"}:
             return _problem(
                 403,
-                "FORBIDDEN_ACTION",
+                ErrorCode.FORBIDDEN_ACTION,
                 "Forbidden",
                 "Agent tokens cannot trigger evidence completion or bypass physical assessment (INV-12, RV-03).",
             )
@@ -1573,14 +1733,14 @@ def create_app(
         if ret.state in {"REQUESTED", "DECLARED"}:
             return _problem(
                 409,
-                "INVALID_STATE_TRANSITION",
+                ErrorCode.INVALID_STATE_TRANSITION,
                 "Conflict",
                 f"Keep-offer cannot be accepted from state {ret.state}. Physical evidence and assessment required.",
             )
 
         offer = _get_or_compute_keep_offer(ret)
         if offer is None:
-            return _problem(404, "NO_KEEP_OFFER", "Not Found", "No keep-offer available for this return.")
+            return _problem(404, ErrorCode.NO_KEEP_OFFER, "Not Found", "No keep-offer available for this return.")
 
         # Guard assessment_exists: an Assessment row exists for the return
         ass = repo.get_latest_assessment(return_id)
@@ -1588,7 +1748,7 @@ def create_app(
         if not assessment_exists:
             return _problem(
                 409,
-                "INVALID_STATE_TRANSITION",
+                ErrorCode.INVALID_STATE_TRANSITION,
                 "Conflict",
                 "Assessment record does not exist for this return.",
             )
@@ -1618,7 +1778,7 @@ def create_app(
                 elif ret.state == "KEEP_OFFERED":
                     repo.apply_return_transition(return_id, "ACCEPT_KEEP_OFFER", not_expired=not_expired)
                 else:
-                    return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", f"Cannot accept keep offer from {ret.state}.")
+                    return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", f"Cannot accept keep offer from {ret.state}.")
                 offer.status = "ACCEPTED"
             else:
                 if ret.state == "ASSESSED":
@@ -1627,34 +1787,40 @@ def create_app(
                 elif ret.state == "KEEP_OFFERED":
                     repo.apply_return_transition(return_id, "DECLINE_KEEP_OFFER")
                 else:
-                    return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", f"Cannot decline keep offer from {ret.state}.")
+                    return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", f"Cannot decline keep offer from {ret.state}.")
                 offer.status = "DECLINED"
             repo.save_keep_offer(offer)
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         if action == "ACCEPT":
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "return_id": return_id,
-                    "keep_offer_id": offer.offer_id,
-                    "status": "KEEP_ACCEPTED",
-                    "tranche_kind": "KEEP",
-                    "posted_price_minor": offer.amount_minor,
-                    "explanation": "Single posted-price keep-offer accepted; partial refund initiated.",
-                    "allowed_actions": [],
-                },
-            )
-        return JSONResponse(
-            status_code=200,
-            content={
+            resp_content = {
                 "return_id": return_id,
                 "keep_offer_id": offer.offer_id,
-                "status": "APPROVED",
+                "status": "KEEP_ACCEPTED",
+                "tranche_kind": "KEEP",
                 "posted_price_minor": offer.amount_minor,
+                "explanation": "Single posted-price keep-offer accepted; partial refund initiated.",
                 "allowed_actions": [],
-            },
+            }
+            if cache_key and body_hash:
+                idempotency_cache[cache_key] = (body_hash, 200, resp_content)
+            return JSONResponse(
+                status_code=200,
+                content=resp_content,
+            )
+        resp_content = {
+            "return_id": return_id,
+            "keep_offer_id": offer.offer_id,
+            "status": "APPROVED",
+            "posted_price_minor": offer.amount_minor,
+            "allowed_actions": [],
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
+        return JSONResponse(
+            status_code=200,
+            content=resp_content,
         )
 
     # =========================================================================
@@ -1664,21 +1830,26 @@ def create_app(
     async def submit_review_decision(
         return_id: str,
         request: Request,
+        req_body: ReviewDecisionRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
 
         if not principal.is_staff or principal.role not in {"REVIEWER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires REVIEWER role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires REVIEWER role.")
 
         ret = repo.get_return(return_id)
         if not ret or ret.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found.")
 
-        body_dict = await request.json()
-        req_body = ReviewDecisionRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/review/{return_id}/decision", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         order = repo.get_order(ret.order_id)
         price = order.capture_amount_minor if order else 38000
@@ -1752,7 +1923,7 @@ def create_app(
             )
             settle_res = settle_return(settle_inp, policy_cfg)
         except JurisdictionCapViolationError as exc:
-            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.JURISDICTION_CAP_VIOLATION, "Conflict", str(exc))
 
         # Update shopper trust tier if status affected (R4-T7, INV-10)
         if settle_res.new_tier_override and order:
@@ -1791,13 +1962,13 @@ def create_app(
                 transition_event=transition_event,
             )
         except MissingCaptureError as exc:
-            return _problem(409, "CAPTURE_MISSING", "Capture Missing", str(exc))
+            return _problem(409, ErrorCode.CAPTURE_MISSING, "Capture Missing", str(exc))
         except OrderFrozenError as exc:
-            return _problem(409, "ORDER_FROZEN", "Order Frozen", str(exc))
+            return _problem(409, ErrorCode.ORDER_FROZEN, "Order Frozen", str(exc))
         except OverRefundError as exc:
-            return _problem(409, "REFUND_LIMIT_EXCEEDED", "Refund Limit Exceeded", str(exc))
+            return _problem(409, ErrorCode.REFUND_LIMIT_EXCEEDED, "Refund Limit Exceeded", str(exc))
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         # Rehydrate into in-memory ledger cache if action planned
         if settle_action and order and order.capture_id:
@@ -1822,22 +1993,25 @@ def create_app(
                 paypal_debug_id=settle_action.paypal_debug_id,
             )
 
+        resp_content = {
+            "return_id": return_id,
+            "review_id": rev_id,
+            "outcome": req_body.outcome,
+            "verified_grade": req_body.verified_grade,
+            "reviewer_id": principal.sub,
+            "via_policy_engine": True,
+            "final_total_refund_minor": settle_res.final_total_refund_minor,
+            "additional_refund_minor": settle_res.additional_refund_minor,
+            "f_charged_minor": settle_res.f_charged_minor,
+            "new_tier_override": settle_res.new_tier_override,
+            "status_affected": settle_res.status_affected,
+            "explanation": settle_res.explanation,
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
         return JSONResponse(
             status_code=200,
-            content={
-                "return_id": return_id,
-                "review_id": rev_id,
-                "outcome": req_body.outcome,
-                "verified_grade": req_body.verified_grade,
-                "reviewer_id": principal.sub,
-                "via_policy_engine": True,
-                "final_total_refund_minor": settle_res.final_total_refund_minor,
-                "additional_refund_minor": settle_res.additional_refund_minor,
-                "f_charged_minor": settle_res.f_charged_minor,
-                "new_tier_override": settle_res.new_tier_override,
-                "status_affected": settle_res.status_affected,
-                "explanation": settle_res.explanation,
-            },
+            content=resp_content,
         )
 
     # =========================================================================
@@ -1851,7 +2025,7 @@ def create_app(
 
         passport = repo.get_passport(passport_id)
         if not passport:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Passport not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Passport not found.")
 
         # AZ-07 & FR-43: Public projection strips PII and owner references
         return JSONResponse(
@@ -1874,17 +2048,22 @@ def create_app(
     @app.post("/v1/passports")
     async def mint_passport(
         request: Request,
+        req_body: MintPassportRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
 
         if not principal.is_staff or principal.role not in {"PACKER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires PACKER or MERCHANT_ADMIN role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires PACKER or MERCHANT_ADMIN role.")
 
-        body_dict = await request.json()
-        req_body = MintPassportRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, "/v1/passports", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         from backend.domain.passport_tier import select_passport_tier
 
@@ -1942,46 +2121,54 @@ def create_app(
         repo.save_passport_event(evt_rec)
         is_chain_valid = bool(evt_rec.event_hash and evt_rec.prev_hash == prev_h)
 
+        resp_content = {
+            "schema_version": "1.0.0",
+            "passport_id": pid,
+            "merchant_id": principal.merchant_id,
+            "sku": req_body.sku,
+            "tier": computed_tier,
+            "origin_grade": req_body.origin_grade,
+            "weight_g": req_body.weight_g,
+            "self_test_passed": req_body.self_test_passed,
+            "head_hash": head_hash,
+            "manifest_hash": head_hash,
+            "signature": f"ed25519:{sig_b64}",
+            "signing_key_id": packer_kid,
+            "chain_valid": is_chain_valid,
+            "events": [
+                {"event_type": "MINT", "hash": head_hash, "created_at": datetime.now(UTC).isoformat()}
+            ],
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 201, resp_content)
         return JSONResponse(
             status_code=201,
-            content={
-                "schema_version": "1.0.0",
-                "passport_id": pid,
-                "merchant_id": principal.merchant_id,
-                "sku": req_body.sku,
-                "tier": computed_tier,
-                "origin_grade": req_body.origin_grade,
-                "weight_g": req_body.weight_g,
-                "self_test_passed": req_body.self_test_passed,
-                "head_hash": head_hash,
-                "manifest_hash": head_hash,
-                "signature": f"ed25519:{sig_b64}",
-                "signing_key_id": packer_kid,
-                "chain_valid": is_chain_valid,
-                "events": [
-                    {"event_type": "MINT", "hash": head_hash, "created_at": datetime.now(UTC).isoformat()}
-                ],
-            },
+            content=resp_content,
         )
 
     @app.post("/v1/orders/{order_id}/passport")
     async def create_order_passport(
         order_id: str,
         request: Request,
+        req_body: OrderPassportRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_staff or principal.role not in {"PACKER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires PACKER or MERCHANT_ADMIN role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires PACKER or MERCHANT_ADMIN role.")
 
         order = repo.get_order(order_id)
         if not order or order.merchant_id != principal.merchant_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Order not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Order not found.")
 
-        body_dict = await request.json()
-        req_body = OrderPassportRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/orders/{order_id}/passport", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         pid = req_body.passport_id or f"pass_{order_id}"
         packer_priv, _, packer_kid = get_packer_keypair()
@@ -2040,20 +2227,23 @@ def create_app(
         repo.save_passport_event(evt_rec)
         is_chain_valid = bool(evt_rec.event_hash and evt_rec.prev_hash == prev_h)
 
+        resp_content = {
+            "passport_id": pid,
+            "order_id": order_id,
+            "merchant_id": order.merchant_id,
+            "sku": req_body.sku,
+            "tier": tier,
+            "origin_grade": req_body.origin_grade,
+            "weight_g": req_body.weight_g,
+            "self_test_passed": req_body.self_test_passed,
+            "head_hash": head_hash,
+            "chain_valid": is_chain_valid,
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 201, resp_content)
         return JSONResponse(
             status_code=201,
-            content={
-                "passport_id": pid,
-                "order_id": order_id,
-                "merchant_id": order.merchant_id,
-                "sku": req_body.sku,
-                "tier": tier,
-                "origin_grade": req_body.origin_grade,
-                "weight_g": req_body.weight_g,
-                "self_test_passed": req_body.self_test_passed,
-                "head_hash": head_hash,
-                "chain_valid": is_chain_valid,
-            },
+            content=resp_content,
         )
 
     @app.get("/v1/passports/{passport_id}/verify")
@@ -2064,7 +2254,7 @@ def create_app(
 
         passport = repo.get_passport(passport_id)
         if not passport:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Passport not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Passport not found.")
 
         pub_registry = get_public_key_registry()
         packer_pub = pub_registry.get(passport.signing_key_id) or pub_registry.get(PACKER_KEY_ID)
@@ -2148,17 +2338,14 @@ def create_app(
     @app.post("/v1/receiving/{passport_id}/checkpoint")
     async def record_receiving_checkpoint(
         passport_id: str,
-        request: Request,
+        req_body: ReceivingCheckpointRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_staff or principal.role not in {"RECEIVER", "PACKER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires RECEIVER or PACKER role.")
-
-        body_dict = await request.json()
-        req_body = ReceivingCheckpointRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires RECEIVER or PACKER role.")
 
         # R4-T7 (RV2-05 MEDIUM, FR-29, FR-30, FR-31): Integrate domain CustodyLedger
         from backend.domain.custody import (
@@ -2231,51 +2418,56 @@ def create_app(
     async def record_audit_result(
         return_id: str,
         request: Request,
+        req_body: AuditResultRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_staff or principal.role not in {"RECEIVER", "REVIEWER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires RECEIVER or REVIEWER role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires RECEIVER or REVIEWER role.")
 
-        body_dict = await request.json()
-        req_body = AuditResultRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/audits/{return_id}", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
+        resp_content = {
+            "return_id": return_id,
+            "verified_grade": req_body.verified_grade,
+            "conformal_set": req_body.conformal_set,
+            "misdeclaration_cost_minor": req_body.misdeclaration_cost_minor,
+            "notes": req_body.notes,
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
         return JSONResponse(
             status_code=200,
-            content={
-                "return_id": return_id,
-                "verified_grade": req_body.verified_grade,
-                "conformal_set": req_body.conformal_set,
-                "misdeclaration_cost_minor": req_body.misdeclaration_cost_minor,
-                "notes": req_body.notes,
-            },
+            content=resp_content,
         )
 
     @app.post("/v1/appeals")
     async def file_appeal(
-        request: Request,
+        req_body: FileAppealRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_shopper:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only shoppers may file appeals.")
-
-        body_dict = await request.json()
-        req_body = FileAppealRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only shoppers may file appeals.")
 
         ret = repo.get_return(req_body.return_id)
         if not ret or ret.order_id != principal.order_id:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Return not found or out of scope.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Return not found or out of scope.")
 
         latest_review = repo.get_latest_review_by_return(ret.return_id)
         if not latest_review:
             return _problem(
                 409,
-                "NO_REVIEW_FOUND",
+                ErrorCode.NO_REVIEW_FOUND,
                 "Conflict",
                 "Cannot file appeal: no review record found for this return.",
             )
@@ -2317,7 +2509,7 @@ def create_app(
 
         appeal = repo.get_appeal(appeal_id)
         if not appeal:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Appeal not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Appeal not found.")
         return JSONResponse(
             status_code=200,
             content={
@@ -2335,28 +2527,34 @@ def create_app(
     async def decide_appeal_endpoint(
         appeal_id: str,
         request: Request,
+        req_body: DecideAppealRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
 
         if not principal.is_staff or principal.role not in {"REVIEWER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires REVIEWER role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires REVIEWER role.")
 
         appeal = repo.get_appeal(appeal_id)
         if not appeal:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Appeal not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Appeal not found.")
 
-        body_dict = await request.json()
-        req_body = DecideAppealRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/review/appeals/{appeal_id}/decision", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
+
         appeal_reviewer_id = req_body.appeal_reviewer_id or principal.sub
 
         # AUD-29: Enforce independent reviewer constraint (F-15, FR-69)
         if principal.sub == appeal.original_reviewer_id or appeal_reviewer_id == appeal.original_reviewer_id:
             return _problem(
                 409,
-                "SAME_REVIEWER_CONFLICT",
+                ErrorCode.SAME_REVIEWER_CONFLICT,
                 "Conflict",
                 "Appeal must be decided by a different reviewer than the original reviewer (F-15, FR-69).",
             )
@@ -2367,30 +2565,38 @@ def create_app(
         repo.save_appeal(appeal)
 
         comp_minor = appeal.disputed_delta_minor if req_body.outcome == "OVERTURNED" else 0
+        resp_content = {
+            "appeal_id": appeal_id,
+            "status": "RESOLVED",
+            "outcome": req_body.outcome,
+            "appeal_reviewer_id": principal.sub,
+            "compensating_refund_minor": comp_minor,
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
         return JSONResponse(
             status_code=200,
-            content={
-                "appeal_id": appeal_id,
-                "status": "RESOLVED",
-                "outcome": req_body.outcome,
-                "appeal_reviewer_id": principal.sub,
-                "compensating_refund_minor": comp_minor,
-            },
+            content=resp_content,
         )
 
     @app.post("/v1/resale/listings")
     async def create_resale_listing_endpoint(
         request: Request,
+        req_body: CreateResaleListingRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_staff or principal.role not in {"MERCHANT_OPERATOR", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires MERCHANT_OPERATOR or MERCHANT_ADMIN role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_OPERATOR or MERCHANT_ADMIN role.")
 
-        body_dict = await request.json()
-        req_body = CreateResaleListingRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, "/v1/resale/listings", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         listing_id = f"resale_{uuid.uuid4().hex[:8]}"
         listing_rec = ResaleListing(
@@ -2403,22 +2609,27 @@ def create_app(
         )
         repo.save_resale_listing(listing_rec)
 
+        resp_content = {
+            "listing_id": listing_id,
+            "passport_id": req_body.passport_id,
+            "verified_grade": req_body.verified_grade,
+            "price_minor": req_body.price_minor,
+            "status": "ACTIVE",
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 201, resp_content)
         return JSONResponse(
             status_code=201,
-            content={
-                "listing_id": listing_id,
-                "passport_id": req_body.passport_id,
-                "verified_grade": req_body.verified_grade,
-                "price_minor": req_body.price_minor,
-                "status": "ACTIVE",
-            },
+            content=resp_content,
         )
 
     @app.post("/v1/resale/listings/{listing_id}/order")
     async def purchase_resale_listing_endpoint(
         listing_id: str,
         request: Request,
+        req_body: PurchaseResaleListingRequest = Body(default_factory=PurchaseResaleListingRequest),
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         # AUD-22: Resale order endpoint requires authentication
         principal, err = _resolve_principal(authorization, required=True)
@@ -2426,19 +2637,22 @@ def create_app(
             return err
 
         if not principal.is_shopper:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only shoppers may purchase resale listings.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only shoppers may purchase resale listings.")
 
         listing = repo.get_resale_listing(listing_id)
         if not listing:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Resale listing not found.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Resale listing not found.")
 
-        body_dict = await request.json()
-        req_body = PurchaseResaleListingRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, f"/v1/resale/listings/{listing_id}/order", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         # Buyer order verification (must be successfully captured)
         order = repo.get_order(principal.order_id) if principal.order_id else None
         if not order:
-            return _problem(404, "ORDER_NOT_FOUND", "Not Found", "Shopper order not found.")
+            return _problem(404, ErrorCode.ORDER_NOT_FOUND, "Not Found", "Shopper order not found.")
 
         if not order.capture_id:
             if (
@@ -2454,7 +2668,7 @@ def create_app(
                     if not cap_id or cap_status != "COMPLETED":
                         return _problem(
                             409,
-                            "CAPTURE_FAILED",
+                            ErrorCode.CAPTURE_FAILED,
                             "Conflict",
                             "PayPal capture did not return a valid COMPLETED capture id.",
                         )
@@ -2464,7 +2678,7 @@ def create_app(
                     logger.warning("PayPal resale capture attempt failed: %s", exc)
                     return _problem(
                         409,
-                        "CAPTURE_FAILED",
+                        ErrorCode.CAPTURE_FAILED,
                         "Conflict",
                         f"PayPal capture failed: {exc}",
                     )
@@ -2472,7 +2686,7 @@ def create_app(
         if not order.capture_id:
             return _problem(
                 409,
-                "CAPTURE_FAILED",
+                ErrorCode.CAPTURE_FAILED,
                 "Conflict",
                 "Ownership transfer requires a successful PayPal capture of the order.",
             )
@@ -2488,14 +2702,17 @@ def create_app(
             passport.buyer_email = None
             repo.save_passport(passport)
 
+        resp_content = {
+            "listing_id": listing_id,
+            "passport_id": listing.passport_id,
+            "status": "SOLD_TRANSFERRED",
+            "prior_owner_pii_stripped": True,
+        }
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 200, resp_content)
         return JSONResponse(
             status_code=200,
-            content={
-                "listing_id": listing_id,
-                "passport_id": listing.passport_id,
-                "status": "SOLD_TRANSFERRED",
-                "prior_owner_pii_stripped": True,
-            },
+            content=resp_content,
         )
 
     # =========================================================================
@@ -2507,7 +2724,7 @@ def create_app(
         if err:
             return err
         if not principal.is_staff:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires staff role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires staff role.")
 
         pols = repo.list_policies(principal.merchant_id if principal.is_staff else None)
         out_list = [
@@ -2524,17 +2741,22 @@ def create_app(
     @app.post("/v1/policies")
     async def create_policy_endpoint(
         request: Request,
+        req_body: CreatePolicyRequest,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
 
         if not principal.is_staff or principal.role != "MERCHANT_ADMIN":
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only MERCHANT_ADMIN may create policies (AZ-04).")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only MERCHANT_ADMIN may create policies (AZ-04).")
 
-        body_dict = await request.json()
-        req_body = CreatePolicyRequest.model_validate(body_dict)
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, "/v1/policies", principal, idempotency_key
+        )
+        if idem_resp is not None:
+            return idem_resp
 
         j_code = normalize_jurisdiction_code(req_body.jurisdiction)
         default_curve = {
@@ -2559,7 +2781,7 @@ def create_app(
         except JurisdictionCapViolationError as exc:
             return _problem(
                 422,
-                "JURISDICTION_CAP_VIOLATION",
+                ErrorCode.JURISDICTION_CAP_VIOLATION,
                 "Unprocessable Entity",
                 str(exc),
                 extra={"field": exc.field, "errors": exc.errors},
@@ -2576,9 +2798,12 @@ def create_app(
         )
         repo.save_policy(policy_rec)
 
+        resp_content = {"policy_id": pver, "policy_version": pver, "jurisdiction": req_body.jurisdiction}
+        if cache_key and body_hash:
+            idempotency_cache[cache_key] = (body_hash, 201, resp_content)
         return JSONResponse(
             status_code=201,
-            content={"policy_id": pver, "policy_version": pver, "jurisdiction": req_body.jurisdiction},
+            content=resp_content,
         )
 
     @app.get("/v1/review/queue")
@@ -2588,7 +2813,7 @@ def create_app(
             return err
 
         if not principal.is_staff or principal.role not in {"REVIEWER", "MERCHANT_ADMIN"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires REVIEWER role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires REVIEWER role.")
 
         queue = [
             {"return_id": "ret_rev_1", "priority": "P0", "lane": "ESCALATED", "merchant_id": principal.merchant_id},
@@ -2598,7 +2823,7 @@ def create_app(
 
     @app.post("/v1/simulate")
     async def simulate_mechanism(
-        request: Request,
+        req_body: SimulateRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         principal, err = _resolve_principal(authorization, required=True)
@@ -2606,10 +2831,7 @@ def create_app(
             return err
 
         if not principal.is_staff or principal.role not in {"MERCHANT_ADMIN", "MERCHANT_OPERATOR"}:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires MERCHANT_ADMIN or MERCHANT_OPERATOR role.")
-
-        body_dict = await request.json()
-        req_body = SimulateRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_ADMIN or MERCHANT_OPERATOR role.")
 
         merchant_policies = repo.list_policies(principal.merchant_id)
         try:
@@ -2628,7 +2850,7 @@ def create_app(
             )
             res = decide_release(inp, policy, calib)
         except JurisdictionCapViolationError as exc:
-            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.JURISDICTION_CAP_VIOLATION, "Conflict", str(exc))
 
         # Run direct settlement rule simulation episode (FR-52, FR-102)
         import random
@@ -2688,7 +2910,7 @@ def create_app(
         if err:
             return err
         if not principal.is_staff:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires staff role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires staff role.")
 
         rows = generate_feasibility_map(declared_grade=declared_grade)
         return JSONResponse(
@@ -2708,7 +2930,7 @@ def create_app(
         if err:
             return err
         if not principal.is_staff:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires staff role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires staff role.")
 
         roi = compute_merchant_roi()
         annual_savings = round(float(roi.get("net_benefit_per_month_usd", 0.0)) * 12, 2)
@@ -2728,6 +2950,7 @@ def create_app(
     @app.post("/v1/webhooks/paypal")
     async def paypal_webhook(
         request: Request,
+        req_body: PayPalWebhookEventRequest = Body(default_factory=PayPalWebhookEventRequest),
         paypal_transmission_id: str | None = Header(default=None, alias="paypal-transmission-id"),
         paypal_transmission_sig: str | None = Header(default=None, alias="paypal-transmission-sig"),
         paypal_transmission_time: str | None = Header(default=None, alias="paypal-transmission-time"),
@@ -2736,10 +2959,14 @@ def create_app(
     ) -> JSONResponse:
         # AUD-24: Fail-closed webhook signature verification
         body_bytes = await request.body()
-        try:
-            body = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
-        except Exception:
-            body = {}
+        body = req_body.model_dump(exclude_none=True)
+        if body_bytes:
+            try:
+                raw_parsed = json.loads(body_bytes.decode("utf-8"))
+                if isinstance(raw_parsed, dict):
+                    body = raw_parsed
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = req_body.model_dump(exclude_none=True)
 
         sig_valid = False
         webhook_id_secret = getattr(resolved_settings, "paypal_webhook_id", None)
@@ -2783,7 +3010,7 @@ def create_app(
         if not sig_valid:
             return _problem(
                 400,
-                "INVALID_WEBHOOK_SIGNATURE",
+                ErrorCode.INVALID_WEBHOOK_SIGNATURE,
                 "Bad Request",
                 "PayPal webhook signature verification failed (AUD-24).",
             )
@@ -2791,7 +3018,7 @@ def create_app(
         if not isinstance(raw_event_id, str) or not raw_event_id.strip():
             return _problem(
                 400,
-                "INVALID_WEBHOOK_PAYLOAD",
+                ErrorCode.INVALID_WEBHOOK_PAYLOAD,
                 "Bad Request",
                 "PayPal webhook payload is missing required 'id' field (RV3-04).",
             )
@@ -2811,20 +3038,20 @@ def create_app(
         if proc_res.get("duplicate"):
             return JSONResponse(status_code=200, content={"status": "DEDUPLICATED", "event_id": event_id})
         if proc_res.get("status_code") == 404:
-            return _problem(404, "ORDER_NOT_FOUND", "Not Found", f"Order {order_id} not found.")
+            return _problem(404, ErrorCode.ORDER_NOT_FOUND, "Not Found", f"Order {order_id} not found.")
 
         return JSONResponse(status_code=200, content={"status": "PROCESSED", "event_id": event_id, "event_type": event_type})
 
     @app.post("/v1/carrier-events")
     async def post_carrier_event(
-        request: Request,
+        req_body: CarrierEventRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         # FR-96 & TM-24: Manual carrier-events endpoint disabled when DEMO_MODE=false
         if not is_demo:
             return _problem(
                 404,
-                "RESOURCE_NOT_FOUND",
+                ErrorCode.RESOURCE_NOT_FOUND,
                 "Not Found",
                 "Manual carrier event injection is disabled when DEMO_MODE=false (TM-24).",
             )
@@ -2838,22 +3065,19 @@ def create_app(
                 and principal.role in {"RECEIVER", "MERCHANT_OPERATOR", "MERCHANT_ADMIN"}
             )
         ):
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires carrier service or staff role.")
-
-        body_dict = await request.json()
-        req_body = CarrierEventRequest.model_validate(body_dict)
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires carrier service or staff role.")
 
         ret = repo.get_return(req_body.return_id)
         if not ret:
-            return _problem(404, "RETURN_NOT_FOUND", "Not Found", f"Return {req_body.return_id} not found.")
+            return _problem(404, ErrorCode.RETURN_NOT_FOUND, "Not Found", f"Return {req_body.return_id} not found.")
 
         # Service principals carry merchant_id and are limited to their tenant (AUD-21)
         if principal.is_service and principal.merchant_id != "platform" and ret.merchant_id != principal.merchant_id:
-            return _problem(404, "RETURN_NOT_FOUND", "Not Found", f"Return {req_body.return_id} not found.")
+            return _problem(404, ErrorCode.RETURN_NOT_FOUND, "Not Found", f"Return {req_body.return_id} not found.")
 
         # Real state transition pipeline based on carrier scan
         event_type = req_body.type.upper()
-        observed_seal = getattr(req_body, "seal_nonce", None) or body_dict.get("seal_nonce")
+        observed_seal = req_body.seal_nonce
         from backend.domain.nonce import SealNonce
         from backend.domain.return_seal import ReturnSealRecord, verify_return_seal_at_checkin
 
@@ -2907,7 +3131,7 @@ def create_app(
                         ret.return_id, "CHECKIN_PASSED", audit_selected=False
                     )
         except InvalidStateTransitionError as exc:
-            return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
+            return _problem(409, ErrorCode.INVALID_STATE_TRANSITION, "Conflict", str(exc))
 
         # Record tamper-evident custody checkpoint event (Section 25.1, FR-29, FR-30, FR-31)
         from backend.domain.custody import (
@@ -2964,21 +3188,19 @@ def create_app(
 
     @app.post("/v1/demo/clock/advance")
     async def advance_demo_clock(
-        request: Request,
+        req_body: DemoClockRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         nonlocal clock_offset_seconds
         if not is_demo:
-            return _problem(404, "RESOURCE_NOT_FOUND", "Not Found", "Demo clock disabled outside DEMO_MODE.")
+            return _problem(404, ErrorCode.RESOURCE_NOT_FOUND, "Not Found", "Demo clock disabled outside DEMO_MODE.")
 
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal.is_staff or principal.role != "MERCHANT_ADMIN":
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires MERCHANT_ADMIN role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires MERCHANT_ADMIN role.")
 
-        body_dict = await request.json()
-        req_body = DemoClockRequest.model_validate(body_dict)
         clock_offset_seconds += req_body.duration_seconds
 
         return JSONResponse(
@@ -2997,7 +3219,7 @@ def create_app(
         if not is_demo:
             return _problem(
                 404,
-                "RESOURCE_NOT_FOUND",
+                ErrorCode.RESOURCE_NOT_FOUND,
                 "Not Found",
                 "Demo reset endpoint is disabled when DEMO_MODE=false.",
             )
@@ -3007,7 +3229,7 @@ def create_app(
         if not principal.is_staff or principal.role != "MERCHANT_ADMIN":
             return _problem(
                 403,
-                "FORBIDDEN_ROLE",
+                ErrorCode.FORBIDDEN_ROLE,
                 "Forbidden",
                 "Only MERCHANT_ADMIN may reset demo state.",
             )
@@ -3025,7 +3247,7 @@ def create_app(
 
     @app.post("/v1/privacy/deletion-requests")
     async def create_privacy_deletion_request(
-        request: Request,
+        req_body: PrivacyDeletionRequest,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
         # AUD-25, Section 33.4: Subject data erasure requires authenticated principal
@@ -3033,16 +3255,14 @@ def create_app(
         if err:
             return err
         if not principal:
-            return _problem(401, "AUTH_REQUIRED", "Unauthorized", "Authentication required.")
+            return _problem(401, ErrorCode.AUTH_REQUIRED, "Unauthorized", "Authentication required.")
 
-        body_dict = await request.json()
-        req_body = PrivacyDeletionRequest.model_validate(body_dict)
         subject_id = req_body.subject_id
 
         # Scope check: shopper may delete only own subject; MERCHANT_ADMIN only within their merchant
         if principal.is_shopper:
             if principal.sub != subject_id:
-                return _problem(403, "FORBIDDEN", "Forbidden", "Shoppers may only delete their own subject.")
+                return _problem(403, ErrorCode.FORBIDDEN, "Forbidden", "Shoppers may only delete their own subject.")
         elif principal.is_staff and principal.role == "MERCHANT_ADMIN":
             orders = repo.list_orders(merchant_id=principal.merchant_id)
             merchant_subjects = {o.account_id for o in orders}
@@ -3054,12 +3274,12 @@ def create_app(
             if subject_id not in merchant_subjects:
                 return _problem(
                     403,
-                    "FORBIDDEN",
+                    ErrorCode.FORBIDDEN,
                     "Forbidden",
                     f"Merchant admin may only delete subjects within their merchant ({principal.merchant_id}).",
                 )
         else:
-            return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Requires shopper or MERCHANT_ADMIN role.")
+            return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Requires shopper or MERCHANT_ADMIN role.")
 
         from backend.domain.crypto_shred import encrypt_subject_payload, generate_subject_key
         from backend.privacy.lifecycle import (

@@ -106,7 +106,7 @@ def test_each_ssot_jurisdiction_accepts_compliant_and_rejects_exceeding_cap(
         # 1a. Compliant policy accepted via POST /v1/policies
         r_ok = client.post(
             "/v1/policies",
-            headers={"Authorization": f"Bearer {admin_tok}"},
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"ik-r4t4-pol-ok-{jur}"},
             json={
                 "policy_version": f"pol_ok_{jur.lower()}",
                 "jurisdiction": jur,
@@ -146,7 +146,7 @@ def test_each_ssot_jurisdiction_accepts_compliant_and_rejects_exceeding_cap(
         bad_grade, bad_curve = violating_curves[jur]
         r_bad = client.post(
             "/v1/policies",
-            headers={"Authorization": f"Bearer {admin_tok}"},
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"ik-r4t4-pol-bad-{jur}"},
             json={
                 "policy_version": f"pol_bad_{jur.lower()}",
                 "jurisdiction": jur,
@@ -218,7 +218,7 @@ def test_runtime_probe_c_050_is_rejected_regression(
 
     r_api = client.post(
         "/v1/policies",
-        headers={"Authorization": f"Bearer {admin_tok}"},
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": "ik-r4t4-pol-probe-c050"},
         json={
             "policy_version": "pol_probe_c050",
             "jurisdiction": "US",
@@ -245,7 +245,7 @@ def test_eu_and_id_reject_any_non_zero_f(
         # 3a. POST /v1/policies with non-zero fee_f_minor -> 422
         r_fee = client.post(
             "/v1/policies",
-            headers={"Authorization": f"Bearer {admin_tok}"},
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"ik-r4t4-pol-fee-{jur}"},
             json={
                 "policy_version": f"pol_{jur.lower()}_bad_fee",
                 "jurisdiction": jur,
@@ -258,7 +258,7 @@ def test_eu_and_id_reject_any_non_zero_f(
         # 3b. POST /v1/policies with non-zero phi -> 422
         r_phi = client.post(
             "/v1/policies",
-            headers={"Authorization": f"Bearer {admin_tok}"},
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"ik-r4t4-pol-phi-{jur}"},
             json={
                 "policy_version": f"pol_{jur.lower()}_bad_phi",
                 "jurisdiction": jur,
@@ -356,7 +356,7 @@ def test_startup_validates_stored_policies_marks_inactive_and_api_returns_409(
     assert ret is not None
     r_ev = client2.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": "ik-r4t4-ev-inactive-pol"},
         json={
             "sha256": "a" * 64,
             "faces_detected": 0,

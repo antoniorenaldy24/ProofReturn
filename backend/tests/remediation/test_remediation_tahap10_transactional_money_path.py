@@ -62,7 +62,7 @@ def test_over_refund_via_evidence_endpoint_returns_409_and_persists_nothing(
     # Fast lane R0 calculation for $380 item is 21249 minor, which exceeds remaining (1000 minor)
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t10-ev-over"},
         json={
             "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "faces_detected": 0,
@@ -106,7 +106,7 @@ def test_over_refund_via_review_endpoint_returns_409(
 
     resp = client.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-t10-rev-over"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",
@@ -137,7 +137,7 @@ def test_remaining_refundable_survives_app_restart(
     # Plan R0 refund via app1
     resp = client1.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t10-ev-restart"},
         json={
             "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "faces_detected": 0,
@@ -170,7 +170,7 @@ def test_remaining_refundable_survives_app_restart(
     # Now remaining = 38000 - (38000 - r0_amt) - r0_amt = 0
     resp_over = client2.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-t10-rev-restart"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",
@@ -196,7 +196,7 @@ def test_pending_refunded_minor_updated_atomically(
 
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t10-ev-atomic"},
         json={
             "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "faces_detected": 0,
@@ -232,7 +232,7 @@ def test_refund_uses_order_capture_id(
 
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t10-ev-cap-id"},
         json={
             "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "faces_detected": 0,
@@ -266,7 +266,7 @@ def test_missing_capture_id_blocks_planning(
 
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t10-ev-missing-cap"},
         json={
             "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "faces_detected": 0,
@@ -302,7 +302,7 @@ def test_review_invalid_transition_returns_409(
 
     resp = client.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-t10-rev-invalid-trans"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",
@@ -384,7 +384,7 @@ def test_concurrent_planning_never_exceeds_capture(
     def submit_ev(ret_id: str) -> int:
         resp = client.post(
             f"/v1/returns/{ret_id}/evidence",
-            headers={"Authorization": f"Bearer {shopper_token}"},
+            headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": f"ik-t10-ev-conc-{ret_id}"},
             json={
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef",
                 "faces_detected": 0,

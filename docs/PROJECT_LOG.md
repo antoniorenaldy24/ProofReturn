@@ -1353,5 +1353,44 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
 - `uv run pytest -m "not sandbox and not live_model"`: **248 passed, 4 deselected, 0 failed in 49.38s (100% pass rate)**.
 
+---
+
+## [2026-11-08] Session 42 — Round 4 Task T8: Error Catalog, Idempotency, and OpenAPI Request Schemas (RV3-08 LOW, AUD-40 LOW)
+
+### 1. Key Accomplishments
+- **Error Code Catalog & Change Control Document (`backend/api/errors.py`, `docs/change-control/CR-R4-error-codes.md`, `backend/api/app.py`, `backend/api/middleware.py`)**:
+  - Created [`backend/api/errors.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/api/errors.py) defining `ErrorCode` (`StrEnum`), `SSOT_ERROR_CODES` (all 21 codes from `docs/SSOT.md` §28.2), `CR_R4_ERROR_CODES` (28 extension codes not in `docs/SSOT.md` §28.2: 19 pre-existing literal API codes + 2 face-blur/middleware codes + 7 remediation codes from T1–T8), and `ALL_ERROR_CODES`.
+  - Created [`docs/change-control/CR-R4-error-codes.md`](file:///c:/Users/renal/Downloads/ProofReturn/docs/change-control/CR-R4-error-codes.md) documenting every API error code not in `docs/SSOT.md` §28.2 with HTTP status, meaning, and source, plus the 11 mandatory `Idempotency-Key` POST endpoints. Did **not** edit `docs/SSOT.md` itself.
+  - Replaced all string-literal error codes in `_problem(...)` and `ProblemDetails` across [`backend/api/app.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/api/app.py) and [`backend/api/middleware.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/api/middleware.py) with `ErrorCode.<NAME>` constants.
+- **Mandatory `Idempotency-Key` Across All 11 Refund/Capture/Ownership/Policy POST Endpoints (`backend/api/app.py`)**:
+  - Enforced `_require_idempotency` on all 11 POST endpoints that can plan, execute, or change a refund, a capture, an ownership transfer, or a policy:
+    1. `POST /v1/returns`
+    2. `POST /v1/returns/{return_id}/evidence`
+    3. `POST /v1/returns/{return_id}/keep-offer/respond`
+    4. `POST /v1/review/{return_id}/decision`
+    5. `POST /v1/audits/{return_id}`
+    6. `POST /v1/review/appeals/{appeal_id}/decision`
+    7. `POST /v1/orders/{order_id}/passport`
+    8. `POST /v1/passports`
+    9. `POST /v1/resale/listings`
+    10. `POST /v1/resale/listings/{listing_id}/order`
+    11. `POST /v1/policies`
+  - Missing `Idempotency-Key` returns HTTP `400 IDEMPOTENCY_KEY_REQUIRED`; same key + same body replays the cached response; same key + different body returns HTTP `409 IDEMPOTENCY_CONFLICT`; keys are scoped per principal and tenant (`f"POST:{endpoint}:{tenant_scope}:{principal.sub}:{idempotency_key}"`).
+- **Typed FastAPI Request Body Schemas in `/openapi.json` (`backend/api/app.py`, `backend/api/schemas.py`)**:
+  - Replaced all 22 manual `Model.model_validate(body)` calls in `backend/api/app.py` with typed FastAPI Pydantic model parameters (`req_body: <Model>`) so `/openapi.json` documents the `requestBody` schema for every POST endpoint.
+  - Preserved the RFC 9457 `application/problem+json` `422` validation exception handler (`validation_exception_handler`).
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t8_errors_idempotency_openapi.py`)**:
+  - Authored and verified 3 TDD tests (red -> green):
+    1. `test_all_problem_calls_use_error_code_constants_and_cr_doc_lists_extensions`
+    2. `test_idempotency_key_required_replay_and_conflict_on_all_listed_post_endpoints`
+    3. `test_openapi_schema_documents_request_body_for_all_listed_post_endpoints`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t8_errors_idempotency_openapi.py -v`: **3 passed in 1.53s**.
+- `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, 0 `model_validate` calls in `backend/api/app.py`, exit code 0)**.
+- `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.
+- `uv run pytest -m "not sandbox and not live_model"`: **251 passed, 4 deselected, 0 failed (100% pass rate)**.
+
+
 
 

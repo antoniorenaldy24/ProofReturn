@@ -265,7 +265,7 @@ def test_j06_evidence_and_review_persists_refund_actions_in_database(repo: Datab
     # 2. Shopper submits evidence -> R0 tranche calculated ($212.49 / 21249 minor)
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-t3-ev-j06"},
         json={
             "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "faces_detected": 0,
@@ -288,7 +288,7 @@ def test_j06_evidence_and_review_persists_refund_actions_in_database(repo: Datab
     # 3. Warehouse reviewer submits decision with matching grade B
     r_rev = client.post(
         "/v1/review/ret_demo_1/decision",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-t3-rev-j06"},
         json={
             "verified_grade": "B",
             "outcome": "CONFIRMED",

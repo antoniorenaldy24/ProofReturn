@@ -177,6 +177,14 @@ class IssueAgentTokenRequest(StrictRequestModel):
 class CarrierEventRequest(StrictRequestModel):
     return_id: str = Field(..., min_length=1)
     type: str = Field(..., min_length=1)
+    seal_nonce: str | None = Field(default=None)
+    occurred_at: str | None = Field(default=None)
+
+
+class PayPalWebhookEventRequest(StrictRequestModel):
+    id: str | None = Field(default=None, description="PayPal webhook event identifier")
+    event_type: str = Field(default="PAYMENT.CAPTURE.REFUNDED", description="PayPal webhook event type")
+    resource: dict[str, Any] = Field(default_factory=dict, description="PayPal webhook resource payload")
 
 
 class IssueStaffTokenRequest(StrictRequestModel):

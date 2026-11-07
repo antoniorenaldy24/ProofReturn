@@ -83,7 +83,7 @@ def test_guard_retakes_ok_false_returns_409(test_repo: DatabaseRepository, demo_
     token = mint_shopper_token("ord_demo_1", "shopper_1")
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "ik-t13-ev-retakes"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -114,7 +114,7 @@ def test_guard_challenge_valid_false_returns_409(test_repo: DatabaseRepository, 
     token = mint_shopper_token("ord_demo_1", "shopper_1")
     resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "ik-t13-ev-bad-nonce"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -191,7 +191,7 @@ def test_agent_cannot_accept_keep_offer_before_assessment(test_repo: DatabaseRep
     agent_token = mint_agent_token("agent_test", "ord_demo_1", "merch_a", scopes=["keep_offer"])
     resp = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers={"Authorization": f"Bearer {agent_token}"},
+        headers={"Authorization": f"Bearer {agent_token}", "Idempotency-Key": "ik-t13-ko-agent"},
         json={"action": "ACCEPT"},
     )
     assert resp.status_code == 409
@@ -241,7 +241,7 @@ def test_ineligible_keep_offer_returns_404_and_no_refund(test_repo: DatabaseRepo
 
     resp_post = client.post(
         "/v1/returns/ret_demo_new/keep-offer/respond",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "ik-t13-ko-ineligible"},
         json={"action": "ACCEPT"},
     )
     assert resp_post.status_code == 404
@@ -287,7 +287,7 @@ def test_decide_release_receives_account_and_merchant_caps(test_repo: DatabaseRe
     token = mint_shopper_token("ord_demo_2", "shopper_2")
     resp = client.post(
         "/v1/returns/ret_demo_new/evidence",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "ik-t13-ev-new-tier"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_new/challenge.mp4",

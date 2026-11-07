@@ -45,7 +45,7 @@ def test_evidence_without_text_in_media_routes_to_standard_lane_with_reason_reco
 
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": "ik-r4t3-ev-no-ocr"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/no_ocr_challenge.mp4",
@@ -93,7 +93,7 @@ def test_evidence_with_mismatched_ocr_text_returns_409(
 
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": "ik-r4t3-ev-bad-ocr"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/wrong_nonce.mp4",
@@ -189,7 +189,7 @@ def test_passport_created_with_tier_full_for_low_value_item_uses_value_band_tier
     # Case A: POST /v1/passports with tier="FULL" for low-value SKU "SKU-LOW-CABLE"
     r_mint = client.post(
         "/v1/passports",
-        headers={"Authorization": f"Bearer {packer_tok}"},
+        headers={"Authorization": f"Bearer {packer_tok}", "Idempotency-Key": "ik-r4t3-mint-low-a"},
         json={
             "passport_id": "pass_low_val_01",
             "sku": "SKU-LOW-CABLE",
@@ -211,7 +211,7 @@ def test_passport_created_with_tier_full_for_low_value_item_uses_value_band_tier
     # Case B: POST /v1/orders/{order_id}/passport with tier="FULL" in body for low-value order
     r_ord_pass = client.post(
         "/v1/orders/ord_low_val_1/passport",
-        headers={"Authorization": f"Bearer {packer_tok}"},
+        headers={"Authorization": f"Bearer {packer_tok}", "Idempotency-Key": "ik-r4t3-mint-low-b"},
         json={
             "passport_id": "pass_ord_low_val_01",
             "sku": "SKU-LOW-CABLE",

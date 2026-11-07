@@ -335,7 +335,7 @@ def test_aud34_and_az_matrix_exhaustive_negative_authorization():
     rev1_token = mint_staff_token("merch_a", "REVIEWER", "rev_01")
     resp_conflict = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {rev1_token}"},
+        headers={"Authorization": f"Bearer {rev1_token}", "Idempotency-Key": "ik-f6-app-conflict-1"},
         json={"outcome": "OVERTURNED", "notes": "I reviewed myself"},
     )
     assert resp_conflict.status_code == 409
@@ -345,7 +345,7 @@ def test_aud34_and_az_matrix_exhaustive_negative_authorization():
     rev2_token = mint_staff_token("merch_a", "REVIEWER", "rev_02")
     resp_ok = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {rev2_token}"},
+        headers={"Authorization": f"Bearer {rev2_token}", "Idempotency-Key": "ik-f6-app-ok-1"},
         json={"outcome": "OVERTURNED", "notes": "Independent second review confirms original condition"},
     )
     assert resp_ok.status_code == 200
@@ -526,7 +526,7 @@ def test_aud34_and_j_journeys_end_to_end_synthetic_flows():
     # 2. Evidence submission (advances state to ASSESSED)
     ev_resp = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": "ik-f6-ev-j01"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -573,7 +573,7 @@ def test_aud34_and_j_journeys_end_to_end_synthetic_flows():
     # Shopper submits evidence to advance return to ASSESSED (Task T6 / RV-03: keep-offer ACCEPT only from ASSESSED)
     r_ev_j05 = client_j05.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": "ik-f6-ev-j05"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -593,7 +593,7 @@ def test_aud34_and_j_journeys_end_to_end_synthetic_flows():
 
     ko_respond = client_j05.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers=agent_headers,
+        headers={**agent_headers, "Idempotency-Key": "ik-f6-ko-j05"},
         json={"action": "ACCEPT"},
     )
     assert ko_respond.status_code == 200

@@ -113,7 +113,7 @@ def _plan_r0_via_api(client: TestClient, repo: DatabaseRepository, return_id: st
     )
     r_ev = client.post(
         f"/v1/returns/{return_id}/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": f"ik-r4t2-ev-{return_id}"},
         json={
             "sha256": "c" * 64,
             "text_in_media": nonce,
@@ -335,7 +335,7 @@ def test_resale_capture_response_without_id_returns_409_and_ownership_unchanged(
     admin_tok = mint_staff_token(merchant_id="merch_a", role="MERCHANT_ADMIN", sub="admin_01")
     r_list = client.post(
         "/v1/resale/listings",
-        headers={"Authorization": f"Bearer {admin_tok}"},
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": "ik-r4t2-list-1"},
         json={"passport_id": "pass_demo_1", "verified_grade": "A", "price_minor": 31500},
     )
     assert r_list.status_code == 201
@@ -358,7 +358,7 @@ def test_resale_capture_response_without_id_returns_409_and_ownership_unchanged(
     shopper_tok = mint_shopper_token(order_id="ord_resale_uncaptured", shopper_id="shopper_2")
     r_buy = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {shopper_tok}"},
+        headers={"Authorization": f"Bearer {shopper_tok}", "Idempotency-Key": "ik-r4t2-buy-1"},
         json={},
     )
     assert r_buy.status_code == 409, r_buy.text

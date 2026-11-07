@@ -20,7 +20,7 @@ def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None
     # 1. POST /v1/orders/{id}/passport (PACKER role)
     r_pass = client.post(
         "/v1/orders/ord_demo_1/passport",
-        headers={"Authorization": f"Bearer {packer_token}"},
+        headers={"Authorization": f"Bearer {packer_token}", "Idempotency-Key": "ik-full-ord-pass-1"},
         json={
             "sku": "PR-HP-XM5",
             "origin_grade": "A",
@@ -55,7 +55,7 @@ def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None
     # 3. POST /v1/returns/{id}/evidence (Shopper, face blur applied)
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-full-ev-1"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -123,7 +123,7 @@ def test_keep_offer_receiving_checkpoint_and_audit_endpoints() -> None:
     # 0. Submit evidence so return reaches ASSESSED state (Task T6 / RV-03: keep-offer only from ASSESSED)
     r_ev = client.post(
         "/v1/returns/ret_demo_1/evidence",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-full-ev-2"},
         json={
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
@@ -139,7 +139,7 @@ def test_keep_offer_receiving_checkpoint_and_audit_endpoints() -> None:
     # 1. Accept posted keep-offer (FR-39, FR-46, FR-78)
     r_keep = client.post(
         "/v1/returns/ret_demo_1/keep-offer/respond",
-        headers={"Authorization": f"Bearer {shopper_token}"},
+        headers={"Authorization": f"Bearer {shopper_token}", "Idempotency-Key": "ik-full-keep-1"},
         json={"action": "ACCEPT"},
     )
     assert r_keep.status_code == 200
@@ -168,7 +168,7 @@ def test_keep_offer_receiving_checkpoint_and_audit_endpoints() -> None:
     # 3. Record full audit result (POST /v1/audits/{return_id})
     r_aud = client.post(
         "/v1/audits/ret_demo_1",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
+        headers={"Authorization": f"Bearer {reviewer_token}", "Idempotency-Key": "ik-full-aud-1"},
         json={
             "verified_grade": "B",
             "conformal_set": ["B"],
@@ -219,7 +219,7 @@ def test_appeals_resale_policies_and_simulator_views() -> None:
     # 3. Same reviewer blocked from deciding appeal (F-15 independent reviewer rule)
     r_same_rev = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {reviewer_1_token}"},
+        headers={"Authorization": f"Bearer {reviewer_1_token}", "Idempotency-Key": "ik-full-app-same-1"},
         json={"appeal_reviewer_id": "rev_01", "outcome": "OVERTURNED"},
     )
     assert r_same_rev.status_code == 409
@@ -227,7 +227,7 @@ def test_appeals_resale_policies_and_simulator_views() -> None:
     # 4. Independent reviewer overturns appeal -> compensating TOPUP/COMP tranche planned (FR-69)
     r_diff_rev = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {reviewer_2_token}"},
+        headers={"Authorization": f"Bearer {reviewer_2_token}", "Idempotency-Key": "ik-full-app-diff-1"},
         json={"appeal_reviewer_id": "rev_02", "outcome": "OVERTURNED"},
     )
     assert r_diff_rev.status_code == 200
@@ -238,7 +238,7 @@ def test_appeals_resale_policies_and_simulator_views() -> None:
     # 5. Certified Open-Box Resale listing & purchase (POST /v1/resale/listings & /order, F-09, FR-40, FR-41)
     r_list = client.post(
         "/v1/resale/listings",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin_token}", "Idempotency-Key": "ik-full-res-list-1"},
         json={"passport_id": "pass_demo_1", "verified_grade": "B", "price_minor": 31500},
     )
     assert r_list.status_code == 201
@@ -246,7 +246,7 @@ def test_appeals_resale_policies_and_simulator_views() -> None:
 
     r_buy = client.post(
         f"/v1/resale/listings/{listing_id}/order",
-        headers={"Authorization": f"Bearer {buyer_token}"},
+        headers={"Authorization": f"Bearer {buyer_token}", "Idempotency-Key": "ik-full-res-buy-1"},
         json={"new_owner_ref": "owner_secret_ref_2"},
     )
     assert r_buy.status_code == 200

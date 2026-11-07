@@ -346,7 +346,7 @@ def test_agent_token_issuance_and_operational_endpoint_guards() -> None:
     tok_same_reviewer = mint_staff_token(user_id="reviewer_alpha", merchant_id="merch_a", role="REVIEWER")
     r_same_dec = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {tok_same_reviewer}"},
+        headers={"Authorization": f"Bearer {tok_same_reviewer}", "Idempotency-Key": "ik-authz-app-same-1"},
         json={"outcome": "OVERTURNED"},
     )
     assert r_same_dec.status_code == 409
@@ -356,7 +356,7 @@ def test_agent_token_issuance_and_operational_endpoint_guards() -> None:
     tok_diff_reviewer = mint_staff_token(user_id="reviewer_beta", merchant_id="merch_a", role="REVIEWER")
     r_diff_dec = client.post(
         f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {tok_diff_reviewer}"},
+        headers={"Authorization": f"Bearer {tok_diff_reviewer}", "Idempotency-Key": "ik-authz-app-diff-1"},
         json={"outcome": "OVERTURNED"},
     )
     assert r_diff_dec.status_code == 200
