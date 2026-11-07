@@ -361,6 +361,7 @@ class RefundAction(SQLModel, table=True):
     )
     currency: str = Field(default="USD", sa_column=Column(String(3), nullable=False, default="USD"))
     status: str = Field(default="PLANNED")
+    status_detail: str | None = None
     paypal_refund_id: str | None = None
     paypal_debug_id: str | None = None
     attempt_count: int = Field(default=1, sa_column=Column(Integer, nullable=False, default=1))

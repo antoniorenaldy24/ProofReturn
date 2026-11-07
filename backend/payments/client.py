@@ -111,20 +111,15 @@ class PayPalSandboxClient:
         currency: str = "USD",
         request_id: str | None = None,
     ) -> dict[str, Any]:
-        """Create a PayPal Order v2 (live if credentials configured, simulated when offline)."""
-        if self._client_id and self._client_secret and request_id:
-            return self.create_order_live(
-                custom_id=custom_id,
-                request_id=request_id,
-                amount_minor=amount_minor,
-                currency=currency,
-            )
-        return {
-            "id": f"PAYPAL-ORD-{custom_id}",
-            "status": "CREATED",
-            "amount_minor": amount_minor,
-            "currency": currency,
-        }
+        """Create a PayPal Order v2 (live if credentials configured, fail-closed otherwise; RV3-01)."""
+        if not self.has_credentials:
+            raise RuntimeError("PAYPAL_NOT_CONFIGURED: PayPal credentials not configured; live order creation cannot execute.")
+        return self.create_order_live(
+            custom_id=custom_id,
+            request_id=request_id or custom_id,
+            amount_minor=amount_minor,
+            currency=currency,
+        )
 
     def capture_order_live(
         self,
@@ -248,6 +243,45 @@ class PayPalSandboxClient:
             custom_id=custom_id,
             note_to_payer=note_to_payer,
         )
+
+    def get_refund_live(
+        self,
+        *,
+        refund_id: str,
+    ) -> dict[str, Any]:
+        """Query a PayPal refund status via GET /v2/payments/refunds/{refund_id} (RV3-01, FX-07, FX-18)."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        url = f"{self.base_url}/v2/payments/refunds/{refund_id}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "id": data.get("id"),
+                "status": data.get("status", ""),
+                "status_details": data.get("status_details"),
+                "status_detail": (
+                    data.get("status_details", {}).get("reason")
+                    if isinstance(data.get("status_details"), dict)
+                    else data.get("status_detail")
+                ),
+                "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
+            }
+
+    def get_refund(
+        self,
+        *,
+        refund_id: str,
+    ) -> dict[str, Any]:
+        """Fetch refund status from PayPal Sandbox via GET /v2/payments/refunds/{id} (fail-closed without credentials)."""
+        if not self.has_credentials:
+            raise RuntimeError("PAYPAL_NOT_CONFIGURED: PayPal credentials not configured; live refund lookup cannot execute.")
+        return self.get_refund_live(refund_id=refund_id)
 
     def verify_webhook_signature_live(
         self,

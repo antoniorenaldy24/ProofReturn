@@ -309,7 +309,7 @@ class DatabaseRepository:
                             merchant_id=mid,
                             account_id=acc_id,
                             policy_version=pver,
-                            paypal_order_id=f"PP-{oid}",
+                            paypal_order_id=f"PP-{oid}",  # demo-seed-only: synthetic PayPal order id for offline demo seed
                             capture_id=cap_id,
                             capture_amount_minor=amt,
                             confirmed_refunded_minor=0,
@@ -581,7 +581,7 @@ class DatabaseRepository:
                 merchant_id=merchant_id,
                 account_id="shopper_1",
                 policy_version=pver,
-                paypal_order_id=f"PP-{order_id}",
+                paypal_order_id="",
                 capture_id=capture_id,
                 capture_amount_minor=capture_amount_minor,
                 confirmed_refunded_minor=0,
@@ -839,14 +839,63 @@ class DatabaseRepository:
                 session.refresh(act)
             return claimed_actions
 
+    def list_submitted_refund_actions_with_paypal_id(
+        self,
+        limit: int = 10,
+        merchant_id: str | None = None,
+    ) -> list[RefundAction]:
+        """List SUBMITTED refund actions that have a paypal_refund_id for GET /v2/payments/refunds/{id} reconciliation (RV3-01)."""
+        with self._lock, self.get_session() as session:
+            stmt = (
+                select(RefundAction)
+                .where(
+                    RefundAction.status == "SUBMITTED",
+                    RefundAction.paypal_refund_id.is_not(None),  # type: ignore[union-attr]
+                )
+                .order_by(RefundAction.created_at)
+                .limit(limit)
+            )
+            if merchant_id:
+                stmt = stmt.where(RefundAction.merchant_id == merchant_id)
+            actions = list(session.exec(stmt).all())
+            return [a for a in actions if a.paypal_refund_id and a.paypal_refund_id.strip()]
+
+    def record_refund_submitted_pending(
+        self,
+        *,
+        request_id: str,
+        paypal_refund_id: str,
+        status_detail: str | None = "PENDING",
+        paypal_debug_id: str | None = None,
+    ) -> RefundAction:
+        """Record a PENDING refund from PayPal as SUBMITTED with paypal_refund_id and status_detail; keeps pending balance (RV3-01)."""
+        with self._lock, self.get_session() as session:
+            act = session.get(RefundAction, request_id)
+            if not act:
+                raise ValueError(f"RefundAction {request_id} not found.")
+            if act.status == "CONFIRMED":
+                return act
+
+            act.status = "SUBMITTED"
+            act.paypal_refund_id = paypal_refund_id
+            act.status_detail = status_detail
+            if paypal_debug_id:
+                act.paypal_debug_id = paypal_debug_id
+            act.version += 1
+            session.add(act)
+            session.commit()
+            session.refresh(act)
+            return act
+
     def record_refund_confirmed(
         self,
         *,
         request_id: str,
         paypal_refund_id: str,
         paypal_debug_id: str,
+        status_detail: str | None = "COMPLETED",
     ) -> RefundAction:
-        """Mark refund action CONFIRMED and atomically move balance from pending to confirmed (INV-01, AUD-02)."""
+        """Mark refund action CONFIRMED and atomically move balance from pending to confirmed (INV-01, AUD-02, RV3-01)."""
         with self._lock, self.get_session() as session:
             act = session.get(RefundAction, request_id)
             if not act:
@@ -869,6 +918,7 @@ class DatabaseRepository:
             act.status = "CONFIRMED"
             act.paypal_refund_id = paypal_refund_id
             act.paypal_debug_id = paypal_debug_id
+            act.status_detail = status_detail
             act.version += 1
             session.add(act)
 
@@ -881,8 +931,10 @@ class DatabaseRepository:
         *,
         request_id: str,
         paypal_debug_id: str | None = None,
+        paypal_refund_id: str | None = None,
+        status_detail: str | None = None,
     ) -> RefundAction:
-        """Mark refund action UNKNOWN due to network error/timeout; preserves pending balance (AUD-02, ARC-19)."""
+        """Mark refund action UNKNOWN due to network error/timeout or missing id/status; preserves pending balance (AUD-02, ARC-19, RV3-01)."""
         with self._lock, self.get_session() as session:
             act = session.get(RefundAction, request_id)
             if not act:
@@ -890,6 +942,10 @@ class DatabaseRepository:
             act.status = "UNKNOWN"
             if paypal_debug_id:
                 act.paypal_debug_id = paypal_debug_id
+            if paypal_refund_id:
+                act.paypal_refund_id = paypal_refund_id
+            if status_detail is not None:
+                act.status_detail = status_detail
             act.version += 1
             session.add(act)
             session.commit()
@@ -901,8 +957,10 @@ class DatabaseRepository:
         *,
         request_id: str,
         paypal_debug_id: str | None = None,
+        paypal_refund_id: str | None = None,
+        status_detail: str | None = None,
     ) -> RefundAction:
-        """Mark refund action FAILED_PERMANENT on 4xx error and release pending balance (AUD-02, ARC-19)."""
+        """Mark refund action FAILED_PERMANENT on 4xx error or FAILED/CANCELLED status and release pending balance (AUD-02, ARC-19, RV3-01)."""
         with self._lock, self.get_session() as session:
             act = session.get(RefundAction, request_id)
             if not act:
@@ -924,6 +982,10 @@ class DatabaseRepository:
             act.status = "FAILED_PERMANENT"
             if paypal_debug_id:
                 act.paypal_debug_id = paypal_debug_id
+            if paypal_refund_id:
+                act.paypal_refund_id = paypal_refund_id
+            if status_detail is not None:
+                act.status_detail = status_detail
             act.version += 1
             session.add(act)
 
@@ -1340,6 +1402,47 @@ class DatabaseRepository:
                 order.reversed_at = now
                 order.version += 1
                 session.add(order)
+            elif event_type == "PAYMENT.CAPTURE.REFUNDED":
+                res_dict = payload.get("resource") if isinstance(payload.get("resource"), dict) else {}
+                refund_id = str(
+                    payload.get("refund_id")
+                    or res_dict.get("refund_id")
+                    or res_dict.get("id")
+                    or ""
+                ).strip()
+                refund_status = str(res_dict.get("status") or payload.get("status") or "COMPLETED").strip().upper()
+                act_match: RefundAction | None = None
+                if refund_id:
+                    act_match = session.exec(
+                        select(RefundAction).where(RefundAction.paypal_refund_id == refund_id)
+                    ).first()
+                if act_match is None and order is not None:
+                    act_match = session.exec(
+                        select(RefundAction).where(
+                            RefundAction.order_id == order.order_id,
+                            RefundAction.status == "SUBMITTED",
+                        )
+                    ).first()
+                if act_match is not None and act_match.status != "CONFIRMED" and refund_status == "COMPLETED":
+                    target_order = order
+                    if target_order is None:
+                        ord_stmt = select(Order).where(Order.order_id == act_match.order_id)
+                        if not self.engine.url.drivername.startswith("sqlite"):
+                            ord_stmt = ord_stmt.with_for_update()
+                        target_order = session.exec(ord_stmt).first()
+                    if target_order is not None:
+                        target_order.pending_refunded_minor = max(
+                            0, target_order.pending_refunded_minor - act_match.amount_minor
+                        )
+                        target_order.confirmed_refunded_minor += act_match.amount_minor
+                        target_order.version += 1
+                        session.add(target_order)
+                        act_match.status = "CONFIRMED"
+                        act_match.status_detail = "COMPLETED"
+                        if refund_id and not act_match.paypal_refund_id:
+                            act_match.paypal_refund_id = refund_id
+                        act_match.version += 1
+                        session.add(act_match)
 
             webhook_rec = WebhookEvent(
                 event_id=event_id,

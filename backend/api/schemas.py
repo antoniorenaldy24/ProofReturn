@@ -125,7 +125,7 @@ class CreateResaleListingRequest(StrictRequestModel):
 
 
 class PurchaseResaleListingRequest(StrictRequestModel):
-    new_owner_ref: str = Field(..., min_length=1)
+    new_owner_ref: str | None = Field(default=None)
 
 
 class SimulateRequest(StrictRequestModel):

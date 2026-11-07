@@ -2,6 +2,29 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.36] — 2026-11-07 (Session 36 / Round 4 Task T2 — Map PayPal Refund and Capture Statuses; Never Fabricate Provider IDs)
+
+### PayPal Refund & Capture Status Mapping and Provider ID Integrity (RV3-01 MEDIUM, RV3-02 LOW)
+- **PayPal Refund Status Mapping (`backend/payments/outbox.py`, `backend/db/repository.py`, `backend/db/models.py`, `backend/migrations/versions/0004_refund_action_status_detail.py`)**:
+  - Added `status_detail` column to `refund_actions` (`0004_refund_action_status_detail`).
+  - Implemented `_apply_refund_response` in `RefundOutboxExecutor`:
+    - `COMPLETED` -> `CONFIRMED` (atomically moves amount from `pending_refunded_minor` to `confirmed_refunded_minor`).
+    - `PENDING` -> `SUBMITTED` with `paypal_refund_id` and `status_detail` stored; keeps balance pending until a `PAYMENT.CAPTURE.REFUNDED` webhook or a subsequent `GET /v2/payments/refunds/{id}` reports `COMPLETED`.
+    - `FAILED` or `CANCELLED` -> `FAILED_PERMANENT` (releases `pending_refunded_minor`; never sent again).
+    - Missing or unexpected status -> `UNKNOWN` (preserves `pending_refunded_minor` for later retry).
+  - Removed fabricated fallback `f"PP-REF-{action.request_id[:8]}"`; a 2xx response without `"id"` logs `REFUND_ID_MISSING` and marks the action `UNKNOWN` without touching `confirmed_refunded_minor`.
+- **Outbox Reconciliation Step & Webhook Completion (`backend/payments/outbox.py`, `backend/payments/client.py`, `backend/db/repository.py`)**:
+  - Added `get_refund_live` and `get_refund` (`GET /v2/payments/refunds/{id}`) to `PayPalSandboxClient`.
+  - Added reconciliation step in `RefundOutboxExecutor.run_once`: queries `SUBMITTED` actions with a `paypal_refund_id` (`list_submitted_refund_actions_with_paypal_id`), polls `GET /v2/payments/refunds/{id}`, and applies `_apply_refund_response`.
+  - Updated `DatabaseRepository.process_webhook_event_transactional` to handle `PAYMENT.CAPTURE.REFUNDED` idempotently so a `PENDING` refund is confirmed at most once across GET polling and webhook delivery.
+- **Resale Capture Without Fabricated IDs (`backend/api/app.py`)**:
+  - Removed `or f"CAP_{order.order_id}"` in `POST /v1/resale/listings/{listing_id}/order`.
+  - Without a valid non-empty capture `"id"` and `"status": "COMPLETED"` from PayPal, no capture is stored, ownership and listing status remain unchanged, and the endpoint returns HTTP `409 CAPTURE_FAILED`.
+- **Demo Seed Marker Hygiene (`backend/db/repository.py`)**:
+  - Annotated demo seed `paypal_order_id=f"PP-{oid}"` in `seed_demo_data` with `# demo-seed-only: synthetic PayPal order id for offline demo seed` and removed all provider-id-shaped string interpolations outside the seed function.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t2_paypal_status_mapping.py`)**:
+  - 5/5 new T2 tests passing; gate reports 0 `fabricated provider id` findings (down from 6 total baseline findings to 3 remaining findings).
+
 ## [1.2.1-dev.35] — 2026-11-07 (Session 35 / Round 4 Task T1 — Enforce Dispute and Reversal Freezes on Database Refund Path)
 
 ### Database-Backed Dispute and Capture Reversal Freeze Enforcement (RV3-11 HIGH, FR-75)

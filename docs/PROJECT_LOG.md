@@ -1177,3 +1177,39 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run pytest -m "not sandbox and not live_model"`: **225 passed, 4 deselected, 0 failed (100% pass rate)**.
 - `is_order_frozen` single source of truth check: Only `DatabaseRepository.is_order_frozen` and `RefundLedger.is_order_frozen` exist in non-test backend code, both reading `order.frozen_by_dispute or order.capture_reversed` from the DB `Order` row.
 
+---
+
+## [2026-11-07] Session 36 — Round 4 Task T2: Map PayPal Refund and Capture Statuses; Never Fabricate Provider IDs (RV3-01 MEDIUM, RV3-02 LOW)
+
+### 1. Key Accomplishments
+- **PayPal Refund Status Mapping & Missing-ID Guard (`backend/payments/outbox.py`, `backend/db/repository.py`, `backend/db/models.py`, `backend/migrations/versions/0004_refund_action_status_detail.py`)**:
+  - Added `status_detail` column to `refund_actions` via Alembic migration `0004_refund_action_status_detail`.
+  - Implemented `_apply_refund_response` in `RefundOutboxExecutor`:
+    - Missing `"id"` -> never `CONFIRMED`; logs `REFUND_ID_MISSING` and marks `UNKNOWN`.
+    - `COMPLETED` -> `CONFIRMED` (moves amount from `pending_refunded_minor` to `confirmed_refunded_minor`).
+    - `PENDING` -> `SUBMITTED` with `paypal_refund_id` and `status_detail` stored; stays pending until `PAYMENT.CAPTURE.REFUNDED` webhook or `GET /v2/payments/refunds/{id}` reports `COMPLETED`.
+    - `FAILED` or `CANCELLED` -> `FAILED_PERMANENT` (releases `pending_refunded_minor`; never retried).
+    - Any other or missing status -> `UNKNOWN` (preserves `pending_refunded_minor` for retry).
+- **Outbox Reconciliation Step & Webhook Idempotency (`backend/payments/outbox.py`, `backend/payments/client.py`, `backend/db/repository.py`)**:
+  - Added `get_refund_live` and `get_refund` (`GET /v2/payments/refunds/{id}`) to `PayPalSandboxClient`.
+  - Added reconciliation step in `RefundOutboxExecutor.run_once` for `SUBMITTED` actions with a `paypal_refund_id`, polling `GET /v2/payments/refunds/{id}` and applying `_apply_refund_response`.
+  - Updated `DatabaseRepository.process_webhook_event_transactional` to handle `PAYMENT.CAPTURE.REFUNDED` idempotently so a `PENDING` refund is confirmed at most once across GET reconciliation and webhook delivery.
+- **Resale Capture Integrity (`backend/api/app.py`)**:
+  - Removed `or f"CAP_{order.order_id}"` in `POST /v1/resale/listings/{listing_id}/order`.
+  - Without a valid capture `"id"` and `"status": "COMPLETED"` from PayPal, no capture is stored, ownership and listing status remain unchanged, and the endpoint returns `409 CAPTURE_FAILED`.
+- **Demo Seed Marker Hygiene (`backend/db/repository.py`)**:
+  - Marked `paypal_order_id=f"PP-{oid}"` in `seed_demo_data` with `# demo-seed-only: synthetic PayPal order id for offline demo seed` and eliminated all provider-id-shaped interpolations outside the seed function.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t2_paypal_status_mapping.py`)**:
+  - Authored and verified 5 TDD test cases (red -> green):
+    1. `test_pending_refund_not_confirmed_then_completed_via_get_or_webhook_confirms_once`
+    2. `test_failed_and_cancelled_release_pending_and_never_sent_again[FAILED]`
+    3. `test_failed_and_cancelled_release_pending_and_never_sent_again[CANCELLED]`
+    4. `test_2xx_without_id_marks_unknown_and_confirmed_balance_unchanged`
+    5. `test_resale_capture_response_without_id_returns_409_and_ownership_unchanged`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t2_paypal_status_mapping.py -v`: **5 passed in 1.90s**.
+- `uv run pytest -m "not sandbox and not live_model"`: **230 passed, 4 deselected, 0 failed (100% pass rate)**.
+- `python scripts/check_antipatterns.py`: **0 findings in `fabricated provider id` (1 reviewed `demo-seed-only` marker in `seed_demo_data`; 3 remaining baseline findings from T3)**.
+
+

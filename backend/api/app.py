@@ -2162,16 +2162,30 @@ def create_app(
             ):
                 try:
                     cap_res = paypal_client.capture_order(paypal_order_id=order.paypal_order_id)
-                    if cap_res.get("status") == "COMPLETED":
-                        order.capture_id = cap_res.get("id") or f"CAP_{order.order_id}"
-                        repo.save_order(order)
+                    cap_id = str(cap_res.get("id") or "").strip() if isinstance(cap_res, dict) else ""
+                    cap_status = str(cap_res.get("status") or "").strip().upper() if isinstance(cap_res, dict) else ""
+                    if not cap_id or cap_status != "COMPLETED":
+                        return _problem(
+                            409,
+                            "CAPTURE_FAILED",
+                            "Conflict",
+                            "PayPal capture did not return a valid COMPLETED capture id.",
+                        )
+                    order.capture_id = cap_id
+                    repo.save_order(order)
                 except Exception as exc:
                     logger.warning("PayPal resale capture attempt failed: %s", exc)
+                    return _problem(
+                        409,
+                        "CAPTURE_FAILED",
+                        "Conflict",
+                        f"PayPal capture failed: {exc}",
+                    )
 
         if not order.capture_id:
             return _problem(
                 409,
-                "CAPTURE_REQUIRED",
+                "CAPTURE_FAILED",
                 "Conflict",
                 "Ownership transfer requires a successful PayPal capture of the order.",
             )
