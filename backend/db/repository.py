@@ -839,17 +839,25 @@ class DatabaseRepository:
         self,
         limit: int = 10,
         merchant_id: str | None = None,
+        now: datetime | None = None,
+        max_attempts: int = 8,
     ) -> list[RefundAction]:
-        """Claim up to limit PLANNED or UNKNOWN refund actions, marking them SUBMITTED.
+        """Claim up to limit PLANNED or eligible UNKNOWN refund actions, marking them SUBMITTED.
+        Respects next_attempt_at backoff and max_attempts ceiling (RV3-12).
         Skips actions whose order is frozen or reversed, marking them BLOCKED_BY_DISPUTE
         and releasing pending_refunded_minor in the same transaction (AUD-02, ARC-19, RV3-11, FR-75).
         """
+        effective_now = now or datetime.now(timezone.utc)
+        if effective_now.tzinfo is None:
+            effective_now = effective_now.replace(tzinfo=timezone.utc)
+        else:
+            effective_now = effective_now.astimezone(timezone.utc)
+
         with self._lock, self.get_session() as session:
             stmt = (
                 select(RefundAction)
                 .where(RefundAction.status.in_(["PLANNED", "UNKNOWN"]))
                 .order_by(RefundAction.created_at)
-                .limit(limit)
             )
             if merchant_id:
                 stmt = stmt.where(RefundAction.merchant_id == merchant_id)
@@ -858,6 +866,20 @@ class DatabaseRepository:
             actions = list(session.exec(stmt).all())
             claimed_actions: list[RefundAction] = []
             for act in actions:
+                if len(claimed_actions) >= limit:
+                    break
+                if act.status == "UNKNOWN":
+                    if act.attempt_count >= max_attempts:
+                        continue
+                    if act.next_attempt_at is not None:
+                        next_dt = (
+                            act.next_attempt_at.replace(tzinfo=timezone.utc)
+                            if act.next_attempt_at.tzinfo is None
+                            else act.next_attempt_at.astimezone(timezone.utc)
+                        )
+                        if next_dt > effective_now:
+                            continue
+
                 ord_stmt = select(Order).where(Order.order_id == act.order_id)
                 if not self.engine.url.drivername.startswith("sqlite"):
                     ord_stmt = ord_stmt.with_for_update()
@@ -879,6 +901,37 @@ class DatabaseRepository:
             for act in claimed_actions:
                 session.refresh(act)
             return claimed_actions
+
+    def list_refund_actions_by_status(
+        self,
+        status: str,
+        merchant_id: str | None = None,
+    ) -> list[RefundAction]:
+        """List refund actions matching a specific status (e.g. NEEDS_ATTENTION; RV3-12)."""
+        with self._lock, self.get_session() as session:
+            stmt = select(RefundAction).where(RefundAction.status == status).order_by(RefundAction.created_at)
+            if merchant_id:
+                stmt = stmt.where(RefundAction.merchant_id == merchant_id)
+            return list(session.exec(stmt).all())
+
+    def list_exhausted_unknown_refund_actions(
+        self,
+        max_attempts: int = 8,
+        merchant_id: str | None = None,
+    ) -> list[RefundAction]:
+        """List UNKNOWN refund actions that have reached or exceeded max_attempts (RV3-12)."""
+        with self._lock, self.get_session() as session:
+            stmt = (
+                select(RefundAction)
+                .where(
+                    RefundAction.status == "UNKNOWN",
+                    RefundAction.attempt_count >= max_attempts,
+                )
+                .order_by(RefundAction.created_at)
+            )
+            if merchant_id:
+                stmt = stmt.where(RefundAction.merchant_id == merchant_id)
+            return list(session.exec(stmt).all())
 
     def list_submitted_refund_actions_with_paypal_id(
         self,
@@ -960,6 +1013,7 @@ class DatabaseRepository:
             act.paypal_refund_id = paypal_refund_id
             act.paypal_debug_id = paypal_debug_id
             act.status_detail = status_detail
+            act.next_attempt_at = None
             act.version += 1
             session.add(act)
 
@@ -974,8 +1028,10 @@ class DatabaseRepository:
         paypal_debug_id: str | None = None,
         paypal_refund_id: str | None = None,
         status_detail: str | None = None,
+        now: datetime | None = None,
+        next_attempt_at: datetime | None = None,
     ) -> RefundAction:
-        """Mark refund action UNKNOWN due to network error/timeout or missing id/status; preserves pending balance (AUD-02, ARC-19, RV3-01)."""
+        """Mark refund action UNKNOWN due to network error/timeout or missing id/status, scheduling exponential backoff; preserves pending balance (AUD-02, ARC-19, RV3-01, RV3-12)."""
         with self._lock, self.get_session() as session:
             act = session.get(RefundAction, request_id)
             if not act:
@@ -987,6 +1043,45 @@ class DatabaseRepository:
                 act.paypal_refund_id = paypal_refund_id
             if status_detail is not None:
                 act.status_detail = status_detail
+            if next_attempt_at is not None:
+                act.next_attempt_at = next_attempt_at
+            else:
+                effective_now = now or datetime.now(timezone.utc)
+                if effective_now.tzinfo is None:
+                    effective_now = effective_now.replace(tzinfo=timezone.utc)
+                else:
+                    effective_now = effective_now.astimezone(timezone.utc)
+                backoff_minutes = min(60, 2 ** max(0, int(act.attempt_count) - 1))
+                act.next_attempt_at = effective_now + timedelta(minutes=backoff_minutes)
+            act.version += 1
+            session.add(act)
+            session.commit()
+            session.refresh(act)
+            return act
+
+    def record_refund_needs_attention(
+        self,
+        *,
+        request_id: str,
+        status_detail: str | None = "MAX_ATTEMPTS_EXCEEDED",
+        paypal_debug_id: str | None = None,
+        paypal_refund_id: str | None = None,
+    ) -> RefundAction:
+        """Mark refund action NEEDS_ATTENTION after max retry attempts; preserves pending balance (RV3-12)."""
+        with self._lock, self.get_session() as session:
+            act = session.get(RefundAction, request_id)
+            if not act:
+                raise ValueError(f"RefundAction {request_id} not found.")
+            if act.status == "CONFIRMED":
+                return act
+            act.status = "NEEDS_ATTENTION"
+            act.next_attempt_at = None
+            if status_detail is not None:
+                act.status_detail = status_detail
+            if paypal_debug_id:
+                act.paypal_debug_id = paypal_debug_id
+            if paypal_refund_id:
+                act.paypal_refund_id = paypal_refund_id
             act.version += 1
             session.add(act)
             session.commit()
@@ -1021,6 +1116,7 @@ class DatabaseRepository:
             session.add(order)
 
             act.status = "FAILED_PERMANENT"
+            act.next_attempt_at = None
             if paypal_debug_id:
                 act.paypal_debug_id = paypal_debug_id
             if paypal_refund_id:
@@ -1190,6 +1286,7 @@ class DatabaseRepository:
                         amount_minor=refund_amount_minor,
                         currency=order.currency,
                         status="PLANNED",
+                        attempt_count=0,
                         paypal_debug_id=paypal_debug_id,
                     )
                     session.add(action)
@@ -1338,6 +1435,7 @@ class DatabaseRepository:
                         amount_minor=refund_amount_minor,
                         currency=order.currency,
                         status="PLANNED",
+                        attempt_count=0,
                         paypal_debug_id=paypal_debug_id,
                     )
                     session.add(action)

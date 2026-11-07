@@ -197,8 +197,9 @@ def test_executor_timeout_sets_unknown_and_retries_with_same_request_id(test_rep
     assert ord_run1.pending_refunded_minor == 15000
     assert ord_run1.confirmed_refunded_minor == 0
 
-    # Second run retries with the SAME request id and succeeds
-    res2 = executor.run_once(limit=10)
+    # Second run (after backoff window) retries with the SAME request id and succeeds
+    from datetime import UTC, datetime, timedelta
+    res2 = executor.run_once(limit=10, now=datetime.now(UTC) + timedelta(minutes=2))
     assert res2["confirmed"] >= 1
 
     assert len(fake_client.recorded_requests) == 2

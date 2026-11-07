@@ -182,12 +182,19 @@ def evaluate_alerts(metrics: MetricsRegistry) -> list[FiredAlert]:
                 runbook_id="RB-01",
             )
         )
-    if metrics.get_gauge("unknown_payment_action_max_age_minutes") > 15:
+    if (
+        metrics.get_gauge("unknown_payment_action_max_age_minutes") > 15
+        or metrics.get_gauge("outbox_needs_attention_count") > 0
+    ):
         fired.append(
             FiredAlert(
                 alert_id="AL-02",
                 severity="HIGH",
-                condition="UNKNOWN payment action > 15 min",
+                condition=(
+                    "Refund action NEEDS_ATTENTION after max outbox retries"
+                    if metrics.get_gauge("outbox_needs_attention_count") > 0
+                    else "UNKNOWN payment action > 15 min"
+                ),
                 runbook_id="RB-02",
             )
         )

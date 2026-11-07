@@ -342,7 +342,7 @@ def create_app(
             client_secret=resolved_settings.paypal_client_secret.get_secret_value() if resolved_settings.has_live_paypal_credentials else None,
         )
     paypal_client = active_paypal_client
-    outbox_executor = RefundOutboxExecutor(repository=repo, client=paypal_client)
+    outbox_executor = RefundOutboxExecutor(repository=repo, client=paypal_client, metrics=global_metrics)
     app.state.paypal_client = paypal_client
     app.state.outbox_executor = outbox_executor
 
@@ -439,6 +439,9 @@ def create_app(
                 return err
             if not principal.is_staff:
                 return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only staff may access alerts remotely.")
+        needs_attention_actions = repo.list_refund_actions_by_status("NEEDS_ATTENTION")
+        if needs_attention_actions:
+            global_metrics.set_gauge("outbox_needs_attention_count", float(len(needs_attention_actions)))
         fired = evaluate_alerts(global_metrics)
         return JSONResponse(
             status_code=200,
@@ -449,6 +452,14 @@ def create_app(
                         "severity": a.severity,
                         "condition": a.condition,
                         "runbook_id": a.runbook_id,
+                        **(
+                            {
+                                "status": "NEEDS_ATTENTION",
+                                "request_ids": [act.request_id for act in needs_attention_actions],
+                            }
+                            if a.alert_id == "AL-02" and needs_attention_actions
+                            else {}
+                        ),
                     }
                     for a in fired
                 ]
@@ -466,7 +477,12 @@ def create_app(
             return err
         if not principal or not principal.is_staff or principal.role != "MERCHANT_ADMIN":
             return _problem(403, "ROLE_FORBIDDEN", "Forbidden", "Only MERCHANT_ADMIN can trigger outbox executor.")
-        result = outbox_executor.run_once(limit=limit, merchant_id=principal.merchant_id)
+        effective_now = datetime.now(UTC) + timedelta(seconds=clock_offset_seconds)
+        result = outbox_executor.run_once(
+            limit=limit,
+            merchant_id=principal.merchant_id,
+            now=effective_now,
+        )
         return JSONResponse(status_code=200, content=result)
 
     # =========================================================================
@@ -2638,7 +2654,15 @@ def create_app(
                 "Bad Request",
                 "PayPal webhook signature verification failed (AUD-24).",
             )
-        event_id = str(body.get("id", f"wh_{uuid.uuid4().hex[:8]}"))
+        raw_event_id = body.get("id")
+        if not isinstance(raw_event_id, str) or not raw_event_id.strip():
+            return _problem(
+                400,
+                "INVALID_WEBHOOK_PAYLOAD",
+                "Bad Request",
+                "PayPal webhook payload is missing required 'id' field (RV3-04).",
+            )
+        event_id = raw_event_id.strip()
         event_type = str(body.get("event_type", "UNKNOWN"))
         resource = body.get("resource", {}) if isinstance(body.get("resource"), dict) else {}
         order_id = str(resource.get("custom_id") or resource.get("order_id") or body.get("order_id", ""))

@@ -365,7 +365,8 @@ class RefundAction(SQLModel, table=True):
     status_detail: str | None = None
     paypal_refund_id: str | None = None
     paypal_debug_id: str | None = None
-    attempt_count: int = Field(default=1, sa_column=Column(Integer, nullable=False, default=1))
+    attempt_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    next_attempt_at: datetime | None = Field(default=None)
     version: int = Field(default=1, sa_column=Column(Integer, nullable=False, default=1))
     created_at: datetime = Field(default_factory=_utc_now)
 

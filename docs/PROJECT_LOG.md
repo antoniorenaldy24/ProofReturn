@@ -1266,6 +1266,28 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run pytest backend/tests/remediation/test_remediation_r4_t4_jurisdiction_caps.py -v`: **4 passed in 1.41s**.
 - `uv run pytest -m "not sandbox and not live_model"`: **238 passed, 4 deselected, 0 failed (100% pass rate)**.
 
+---
 
+## [2026-11-07] Session 39 — Round 4 Task T5: Reject Webhooks Without ID; Bounded Outbox Retries with Escalation (RV3-04 LOW, RV3-12 LOW)
 
+### 1. Key Accomplishments
+- **Mandatory Provider Event ID on Webhooks (`backend/api/app.py`, `backend/payments/webhooks.py`)**:
+  - Removed the random fallback `event_id = str(body.get("id", f"wh_{uuid.uuid4().hex[:8]}"))` in `POST /v1/webhooks/paypal`.
+  - Webhooks without a non-empty string `"id"` now return HTTP `400 INVALID_WEBHOOK_PAYLOAD` without recording a `WebhookEvent` or applying any side effects to the order.
+  - Enforced the same non-empty `event_id` check inside `WebhookProcessor.process_webhook`.
+- **Bounded Outbox Retries with Exponential Backoff & Escalation (`backend/migrations/versions/0006_refund_action_next_attempt_at.py`, `backend/db/models.py`, `backend/db/repository.py`, `backend/payments/outbox.py`, `backend/payments/client.py`, `backend/observability/metrics.py`, `backend/api/app.py`)**:
+  - Added `next_attempt_at` (`TIMESTAMP WITH TIME ZONE NULL`) to `refund_actions` via Alembic migration `0006_refund_action_next_attempt_at` and synced `RefundAction` in `backend/db/models.py`.
+  - Implemented exponential backoff (`compute_outbox_backoff_minutes`: `1, 2, 4, 8, 16, 32, 60` minutes capped at `60` minutes) when recording `UNKNOWN` refund actions (`record_refund_unknown`).
+  - Updated `claim_planned_refund_actions` to skip `UNKNOWN` actions whose `next_attempt_at > now` or `attempt_count >= max_attempts` (`8`), while preserving the deterministic `PayPal-Request-Id` (`action.request_id`) across every retry.
+  - Added `_reconcile_exhausted_action` and `record_refund_needs_attention`: after `8` failed attempts, the outbox calls `GET /v2/payments/refunds/{id}` (if `paypal_refund_id` exists) or `GET /v2/payments/captures/{id}` (`get_capture_refunds_live` / `get_capture_live`); if still unresolved, transitions the action to `NEEDS_ATTENTION`, preserves `pending_refunded_minor` (`confirmed_refunded_minor` unchanged), and raises a `HIGH` operational alert (`AL-02`) visible in `GET /v1/ops/alerts`.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t5_webhook_id_and_outbox_backoff.py`)**:
+  - Authored and verified 3 TDD tests (red -> green):
+    1. `test_webhook_without_id_returns_400_and_same_payload_with_id_processed_once`
+    2. `test_unknown_action_not_retried_before_next_attempt_at_and_uses_identical_request_id`
+    3. `test_after_8_failed_attempts_escalates_to_needs_attention_and_raises_alert`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t5_webhook_id_and_outbox_backoff.py -v`: **3 passed in 1.44s**.
+- `uv run pytest -m "not sandbox and not live_model"`: **241 passed, 4 deselected, 0 failed (100% pass rate)**.
+- `python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
 

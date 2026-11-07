@@ -193,7 +193,7 @@ def test_aud07_rv08_aud42_alembic_22_tables_psycopg_and_dockerfile_hardening(tmp
 
     with repo.engine.connect() as conn:
         ver = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar()
-        assert ver == "0005_policy_is_active"
+        assert ver == "0006_refund_action_next_attempt_at"
 
     # 3. Verify RefundAction has merchant_id, capture_id, paypal_debug_id, attempt_count, currency, version (AUD-42, DB-01, DB-07)
     ra_cols = {c["name"] for c in insp.get_columns("refund_actions")}

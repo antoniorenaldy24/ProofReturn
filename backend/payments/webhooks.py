@@ -50,6 +50,13 @@ class WebhookProcessor:
                 "duplicate": False,
             }
 
+        if not isinstance(event_id, str) or not event_id.strip():
+            return {
+                "status_code": 400,
+                "code": "INVALID_WEBHOOK_PAYLOAD",
+                "duplicate": False,
+            }
+
         repo = self.repository or (self.ledger.repository if self.ledger is not None else None)
         if repo is None:
             raise RuntimeError("WebhookProcessor requires a DatabaseRepository.")

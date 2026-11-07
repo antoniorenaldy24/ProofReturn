@@ -283,6 +283,41 @@ class PayPalSandboxClient:
             raise RuntimeError("PAYPAL_NOT_CONFIGURED: PayPal credentials not configured; live refund lookup cannot execute.")
         return self.get_refund_live(refund_id=refund_id)
 
+    def get_capture_live(
+        self,
+        *,
+        capture_id: str,
+    ) -> dict[str, Any]:
+        """Query a PayPal capture via GET /v2/payments/captures/{capture_id} (RV3-12)."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        url = f"{self.base_url}/v2/payments/captures/{capture_id}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "id": data.get("id", capture_id),
+                "status": data.get("status", ""),
+                "refunds": data.get("refunds", []),
+                "links": data.get("links", []),
+                "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
+            }
+
+    def get_capture_refunds_live(
+        self,
+        *,
+        capture_id: str,
+    ) -> list[dict[str, Any]]:
+        """Query refunds associated with a capture via GET /v2/payments/captures/{capture_id} (RV3-12)."""
+        cap_data = self.get_capture_live(capture_id=capture_id)
+        refunds = cap_data.get("refunds")
+        return list(refunds) if isinstance(refunds, list) else []
+
     def verify_webhook_signature_live(
         self,
         *,

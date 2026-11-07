@@ -2,6 +2,20 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.39] — 2026-11-07 (Session 39 / Round 4 Task T5 — Reject Webhooks Without ID; Bounded Outbox Retries with Escalation)
+
+### Mandatory Webhook Event ID & Bounded Outbox Retries with Escalation (RV3-04 LOW, RV3-12 LOW)
+- **Reject Webhooks Without `"id"` (`backend/api/app.py`, `backend/payments/webhooks.py`)**:
+  - Removed the random `f"wh_{uuid.uuid4().hex[:8]}"` fallback in `POST /v1/webhooks/paypal`.
+  - PayPal webhook payloads missing a non-empty `"id"` field are rejected with HTTP `400 INVALID_WEBHOOK_PAYLOAD`, with no database deduplication record written and no side effects on the order.
+- **Bounded Outbox Retries, Exponential Backoff & Escalation (`backend/migrations/versions/0006_refund_action_next_attempt_at.py`, `backend/db/models.py`, `backend/db/repository.py`, `backend/payments/outbox.py`, `backend/payments/client.py`, `backend/observability/metrics.py`)**:
+  - Added `next_attempt_at` to `refund_actions` (`0006_refund_action_next_attempt_at`).
+  - `UNKNOWN` actions schedule exponential backoff (`1, 2, 4, 8, 16, 32, 60` minutes, capped at `60` minutes) and are never retried before `next_attempt_at`.
+  - Every retry of the same action uses the identical `PayPal-Request-Id` (`action.request_id`).
+  - After `8` failed attempts, the outbox calls `GET` on the refund (`get_refund_live` if `paypal_refund_id` exists) or the capture's refunds (`get_capture_refunds_live` / `get_capture_live`); if still unresolved, marks the action `NEEDS_ATTENTION`, preserves `pending_refunded_minor` (`confirmed_refunded_minor == 0`), and raises an alert (`AL-02`) visible in `GET /v1/ops/alerts`.
+- **TDD & Gate Verification (`backend/tests/remediation/test_remediation_r4_t5_webhook_id_and_outbox_backoff.py`)**:
+  - 3/3 new T5 tests passing; full suite 241 passed, 4 deselected, 0 failed; `python scripts/check_antipatterns.py` exits `0` with **0 findings** across the entire repository.
+
 ## [1.2.1-dev.38] — 2026-11-07 (Session 38 / Round 4 Task T4 — Enforce Jurisdiction Caps)
 
 ### SSOT Jurisdiction Cap Enforcement Across API, Startup, and Engine (RV3-06 MEDIUM, INV-11, FR-10, FR-84)
