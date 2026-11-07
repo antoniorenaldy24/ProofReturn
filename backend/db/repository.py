@@ -385,7 +385,8 @@ class DatabaseRepository:
                     )
 
             # 9. Initial Review on ret_demo_escalated so Appeals can look up original_reviewer_id from DB (AUD-29)
-            if not session.get(Review, "rev_rec_demo_1"):
+            existing_rev = session.get(Review, "rev_rec_demo_1")
+            if not existing_rev:
                 session.add(
                     Review(
                         review_id="rev_rec_demo_1",
@@ -396,6 +397,9 @@ class DatabaseRepository:
                         notes="Initial warehouse review.",
                     )
                 )
+            else:
+                existing_rev.reviewer_id = "rev_01"
+                session.add(existing_rev)
 
             session.commit()
 

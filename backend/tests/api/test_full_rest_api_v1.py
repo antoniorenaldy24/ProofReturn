@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from backend.api.app import create_app
 from backend.auth.tokens import mint_shopper_token, mint_staff_token
 
 
-def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None:
+def test_order_passport_declaration_evidence_dropoff_and_receipts_flow(reset_db: Any) -> None:
     """Tests POST /v1/orders/{id}/passport, POST /v1/returns/{id}/declaration,
     POST /v1/returns/{id}/evidence, POST /v1/returns/{id}/dropoff,
     GET /v1/returns/{id}/receipts, and GET /v1/returns/{id}/evidence-pack.
@@ -111,7 +113,7 @@ def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None
     assert pack_data["pack_sha256"].startswith("sha256:") or len(pack_data["pack_sha256"]) == 64
 
 
-def test_keep_offer_receiving_checkpoint_and_audit_endpoints() -> None:
+def test_keep_offer_receiving_checkpoint_and_audit_endpoints(reset_db: Any) -> None:
     """Tests POST /v1/returns/{id}/keep-offer/respond,
     POST /v1/receiving/{passport_id}/checkpoint, and POST /v1/audits/{return_id}.
     """
@@ -181,7 +183,7 @@ def test_keep_offer_receiving_checkpoint_and_audit_endpoints() -> None:
     assert aud_data["misdeclaration_cost_minor"] == 0
 
 
-def test_appeals_resale_policies_and_simulator_views() -> None:
+def test_appeals_resale_policies_and_simulator_views(reset_db: Any) -> None:
     """Tests POST /v1/appeals, GET /v1/appeals/{id}, POST /v1/review/appeals/{id}/decision,
     POST /v1/resale/listings, POST /v1/resale/listings/{id}/order,
     GET /v1/policies, GET /v1/simulate/feasibility-map, and GET /v1/simulate/roi.

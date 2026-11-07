@@ -20,7 +20,7 @@ from backend.observability.logger import scrub_sensitive_log
 
 
 @pytest.mark.req("NFR-11", "INV-12", "FR-43", "FR-45")
-def test_authorization_matrix_az01_to_az10() -> None:
+def test_authorization_matrix_az01_to_az10(reset_db: Any) -> None:
     """Section 29.4: Verify AZ-01..AZ-10 tenant isolation, role checks, and agent token scope enforcement."""
     app = create_app(demo_mode=True, mode="judge")
     client = TestClient(app)
@@ -322,46 +322,54 @@ def test_agent_token_issuance_and_operational_endpoint_guards() -> None:
 
     # 3. AUD-29: Appeal Reviewer Independence (FR-69, Section 29.2)
     repo = app.state.repository
-    with repo.get_session() as session:
-        rev = session.get(Review, "rev_rec_demo_1")
-        if rev:
-            rev.reviewer_id = "reviewer_alpha"
-            session.add(rev)
-            session.commit()
+    try:
+        with repo.get_session() as session:
+            rev = session.get(Review, "rev_rec_demo_1")
+            if rev:
+                rev.reviewer_id = "reviewer_alpha"
+                session.add(rev)
+                session.commit()
 
-    r_appeal = client.post(
-        "/v1/appeals",
-        headers={"Authorization": f"Bearer {tok_shopper}"},
-        json={
-            "return_id": "ret_demo_1",
-            "original_reviewer_id": "reviewer_alpha",
-            "subject": "Disagree with grade C assessment",
-            "disputed_delta_minor": 5000,
-        },
-    )
-    assert r_appeal.status_code == 201
-    appeal_id = r_appeal.json()["appeal_id"]
+        r_appeal = client.post(
+            "/v1/appeals",
+            headers={"Authorization": f"Bearer {tok_shopper}"},
+            json={
+                "return_id": "ret_demo_1",
+                "original_reviewer_id": "reviewer_alpha",
+                "subject": "Disagree with grade C assessment",
+                "disputed_delta_minor": 5000,
+            },
+        )
+        assert r_appeal.status_code == 201
+        appeal_id = r_appeal.json()["appeal_id"]
 
-    # Same reviewer who decided original return cannot decide appeal (409 Conflict)
-    tok_same_reviewer = mint_staff_token(user_id="reviewer_alpha", merchant_id="merch_a", role="REVIEWER")
-    r_same_dec = client.post(
-        f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {tok_same_reviewer}", "Idempotency-Key": "ik-authz-app-same-1"},
-        json={"outcome": "OVERTURNED"},
-    )
-    assert r_same_dec.status_code == 409
-    assert r_same_dec.json()["code"] == "SAME_REVIEWER_CONFLICT"
+        # Same reviewer who decided original return cannot decide appeal (409 Conflict)
+        tok_same_reviewer = mint_staff_token(user_id="reviewer_alpha", merchant_id="merch_a", role="REVIEWER")
+        r_same_dec = client.post(
+            f"/v1/review/appeals/{appeal_id}/decision",
+            headers={"Authorization": f"Bearer {tok_same_reviewer}", "Idempotency-Key": "ik-authz-app-same-1"},
+            json={"outcome": "OVERTURNED"},
+        )
+        assert r_same_dec.status_code == 409
+        assert r_same_dec.json()["code"] == "SAME_REVIEWER_CONFLICT"
 
-    # Different reviewer succeeds
-    tok_diff_reviewer = mint_staff_token(user_id="reviewer_beta", merchant_id="merch_a", role="REVIEWER")
-    r_diff_dec = client.post(
-        f"/v1/review/appeals/{appeal_id}/decision",
-        headers={"Authorization": f"Bearer {tok_diff_reviewer}", "Idempotency-Key": "ik-authz-app-diff-1"},
-        json={"outcome": "OVERTURNED"},
-    )
-    assert r_diff_dec.status_code == 200
-    assert r_diff_dec.json()["status"] == "RESOLVED"
-    assert r_diff_dec.json()["appeal_reviewer_id"] == "reviewer_beta"
+        # Different reviewer succeeds
+        tok_diff_reviewer = mint_staff_token(user_id="reviewer_beta", merchant_id="merch_a", role="REVIEWER")
+        r_diff_dec = client.post(
+            f"/v1/review/appeals/{appeal_id}/decision",
+            headers={"Authorization": f"Bearer {tok_diff_reviewer}", "Idempotency-Key": "ik-authz-app-diff-1"},
+            json={"outcome": "OVERTURNED"},
+        )
+        assert r_diff_dec.status_code == 200
+        assert r_diff_dec.json()["status"] == "RESOLVED"
+        assert r_diff_dec.json()["appeal_reviewer_id"] == "reviewer_beta"
+    finally:
+        with repo.get_session() as session:
+            rev = session.get(Review, "rev_rec_demo_1")
+            if rev:
+                rev.reviewer_id = "rev_01"
+                session.add(rev)
+                session.commit()
 
 
 @pytest.mark.req("INV-13", "NFR-08")

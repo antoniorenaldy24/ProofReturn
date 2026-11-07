@@ -76,7 +76,7 @@ def test_aud27_aead_crypto_shredding_tamper_resistance() -> None:
 
 
 @pytest.mark.req("AUD-28", "FR-61", "FR-76", "INV-16")
-def test_aud28_cryptographic_receipts_commitment_and_passport_chain() -> None:
+def test_aud28_cryptographic_receipts_commitment_and_passport_chain(reset_db: Any) -> None:
     """AUD-28: Real cryptographic backing for receipts (Ed25519) and audit commitments (SHA-256 commit-reveal)."""
     app = create_app(demo_mode=True)
     client = TestClient(app)

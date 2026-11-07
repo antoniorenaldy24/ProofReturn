@@ -1355,6 +1355,37 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 
 ---
 
+## [2026-11-08] Session 43 — Round 4 Task T9: Invariant Test Suite Through the API, Isolated Test Database, and Audit Mapping (AUD-34 MEDIUM, AUD-36 MEDIUM, RV3-09 LOW, AUD-38 LOW)
+
+### 1. Key Accomplishments
+- **Database Test Isolation & Immutability Verification (`backend/tests/conftest.py`, `backend/tests/invariants/test_db_isolation.py`)**:
+  - Overhauled `backend/tests/conftest.py` so test execution never touches the repository database `data/proofreturn.db`.
+  - Configured session-scoped temporary SQLite database via `tmp_path_factory.mktemp("proofreturn_test_db") / "test_isolated.db"` with dynamic `reset_settings_cache()`.
+  - Replaced autouse database fixtures with an explicit, non-autouse `reset_db` fixture so pure unit test modules run without database connection or table creation.
+  - Implemented pre- and post-session SHA-256 hash assertions in `pytest_sessionfinish` guaranteeing `data/proofreturn.db` remains 100% unmutated across test suites.
+- **Negative Invariant Test Suite Through the API (`backend/tests/invariants/`)**:
+  - Implemented 23 negative API tests across 6 dedicated test modules enforcing every system invariant (`INV-01`..`INV-18`), plus `FR-65`, `FR-75`, and database isolation:
+    1. [`test_db_isolation.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_db_isolation.py): `test_db_isolation_repo_file_hash_unmodified`, `test_db_isolation_env_redirected_to_temp_session_db`, `test_db_isolation_active_writes_isolated_from_repo_db`.
+    2. [`test_inv01_to_inv04_money_and_state.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_inv01_to_inv04_money_and_state.py): `INV-01` (over-refund planning rejection), `INV-02` (cross-merchant capture access denied with 404), `INV-03` (retry reuses deterministic request ID), `INV-04` (balance holds released upon final state).
+    3. [`test_inv05_to_inv08_engine_and_custody.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_inv05_to_inv08_engine_and_custody.py): `INV-05` (unregistered state machine transitions rejected), `INV-06` (unsealed payload verification rejected without checkin unseal event), `INV-07` (escrow release rejected without merchant signature/expiration), `INV-08` (resale capture strictly rejected without carrier proof-of-delivery).
+    4. [`test_inv09_to_inv13_security_and_fairness.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_inv09_to_inv13_security_and_fairness.py): `INV-09` (reviewer self-approval forbidden with 403), `INV-10` (gross misdeclaration finding rejected without conformal exclusion), `INV-11` (policy curve exceeding jurisdiction cap rejected with 422), `INV-12` (audit reveal rejected before commitment phase closes), `INV-13` (DP epsilon exhaustion forces degraded mode).
+    5. [`test_inv14_to_inv18_caps_and_degraded.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_inv14_to_inv18_caps_and_degraded.py): `INV-14` (refund rejected when merchant exposure cap exceeded), `INV-15` (degraded mode rejects fast-lane routing), `INV-16` (tampered passport chain fails verification and blocks fast path), `INV-17` (idempotency key conflict with mutated payload rejected with 409), `INV-18` (outbox action marked FAILED_PERMANENT permanently blocked from retry).
+    6. [`test_fr65_and_fr75_nonce_and_freeze.py`](file:///c:/Users/renal/Downloads/ProofReturn/backend/tests/invariants/test_fr65_and_fr75_nonce_and_freeze.py): `FR-65` (omitted OCR text fails challenge check and diverts to standard lane), `FR-75` (dispute freezes all return lifecycle activity).
+- **Audit Mapping Traceability Document (`docs/invariant-tests.md`)**:
+  - Created [`docs/invariant-tests.md`](file:///c:/Users/renal/Downloads/ProofReturn/docs/invariant-tests.md) documenting the complete mapping matrix between requirements (`INV-01`..`INV-18`, `FR-65`, `FR-75`, `AUD-34`, `AUD-36`, `RV3-09`) and passing automated API test functions, negative violation attempts, and verifiable rollback assertions.
+- **Playwright Declaration**:
+  - Not applicable: no browser UI (repository provides headless REST APIs and MCP interfaces).
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/state_machine backend/tests/policy_engine backend/tests/golden -p no:cacheprovider`: **32 passed in 1.71s** (pure unit tests pass without database).
+- `uv run pytest backend/tests/invariants -v`: **23 passed in 3.03s**.
+- `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
+- `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.
+- `uv run pytest -m "not sandbox and not live_model"`: **274 passed, 4 deselected, 0 failed in 33.23s (100% pass rate)**.
+- `data/proofreturn.db` file hash verified identical before and after full test run.
+
+---
+
 ## [2026-11-08] Session 42 — Round 4 Task T8: Error Catalog, Idempotency, and OpenAPI Request Schemas (RV3-08 LOW, AUD-40 LOW)
 
 ### 1. Key Accomplishments

@@ -2,6 +2,28 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.43] — 2026-11-08 (Session 43 / Round 4 Task T9 — Invariant Test Suite Through the API, Isolated Test Database, and Audit Mapping)
+
+### Invariant Test Suite, Session Database Isolation, and Audit Mapping (AUD-34 MEDIUM, AUD-36 MEDIUM, RV3-09 LOW, AUD-38 LOW)
+- **Database Test Isolation & Immutability Verification (`backend/tests/conftest.py`, `backend/tests/invariants/test_db_isolation.py`)**:
+  - Overhauled `backend/tests/conftest.py` with session-scoped isolated temporary SQLite database via `tmp_path_factory.mktemp("proofreturn_test_db") / "test_isolated.db"` and dynamic `reset_settings_cache()`.
+  - Replaced autouse DB fixtures with non-autouse `reset_db` fixture so pure unit tests run without database access or table creation.
+  - Implemented pre- and post-session SHA-256 hash assertions in `pytest_sessionfinish` guaranteeing `data/proofreturn.db` is never modified by tests.
+- **API Invariant Test Suite (`backend/tests/invariants/`)**:
+  - Created 23 negative API tests across 6 modules enforcing all system invariants (`INV-01`..`INV-18`), `FR-65`, and `FR-75`:
+    - `test_db_isolation.py`: Repository file hash integrity and temporary session DB isolation.
+    - `test_inv01_to_inv04_money_and_state.py`: INV-01 over-refund rejection, INV-02 cross-merchant capture 404, INV-03 idempotency retry request ID reuse, INV-04 balance hold release on final state.
+    - `test_inv05_to_inv08_engine_and_custody.py`: INV-05 invalid state transitions, INV-06 sealed payload verification without unsealing event, INV-07 escrow release signature requirement, INV-08 resale capture proof-of-delivery requirement.
+    - `test_inv09_to_inv13_security_and_fairness.py`: INV-09 reviewer self-approval 403, INV-10 conformal exclusion requirement for gross misdeclaration findings, INV-11 jurisdiction cap enforcement on policy curves, INV-12 audit reveal commitment timing, INV-13 differential privacy budget exhaustion degraded mode.
+    - `test_inv14_to_inv18_caps_and_degraded.py`: INV-14 merchant balance floor protection, INV-15 degraded mode fast lane block, INV-16 passport chain invalidity fast path denial, INV-17 idempotency body conflict 409, INV-18 permanent failure retry block.
+    - `test_fr65_and_fr75_nonce_and_freeze.py`: FR-65 missing OCR challenge nonce rejection to standard lane, FR-75 dispute freeze on return activity.
+- **Traceability Matrix (`docs/invariant-tests.md`)**:
+  - Published comprehensive mapping linking each invariant to automated API negative tests and verification assertions.
+- **Playwright Declaration**:
+  - Declared "not applicable: no browser UI" (headless REST API backend).
+- **TDD & Gate Verification**:
+  - 32/32 pure unit tests pass with `uv run pytest backend/tests/state_machine backend/tests/policy_engine backend/tests/golden -p no:cacheprovider`; 274/274 full regression suite pass; `python scripts/check_antipatterns.py` reports 0 findings; `python scripts/check_refs.py` passes XR-01..XR-10.
+
 ## [1.2.1-dev.42] — 2026-11-08 (Session 42 / Round 4 Task T8 — Error Catalog, Idempotency, and OpenAPI Request Schemas)
 
 ### Error Code Catalog, Mandatory Idempotency-Key, and Typed OpenAPI Request Schemas (RV3-08 LOW, AUD-40 LOW)
