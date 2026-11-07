@@ -1291,3 +1291,35 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run pytest -m "not sandbox and not live_model"`: **241 passed, 4 deselected, 0 failed (100% pass rate)**.
 - `python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
 
+---
+
+## [2026-11-07] Session 40 — Round 4 Task T6: Declare Hackathon Release as DEMO_MODE Only (RV3-05 MEDIUM, API-04)
+
+### 1. Key Accomplishments
+- **Runtime Startup Warning & `/v1/ready` Auth Mode (`backend/api/app.py`)**:
+  - In `create_app`, when `demo_mode` is `False`, the app logs a startup warning:
+    `AUTH_NOT_AVAILABLE_OUTSIDE_DEMO: Authentication outside DEMO_MODE is not available; staff login and shopper magic-link delivery are deferred for hackathon release (RV3-05, API-04).`
+  - In `GET /v1/ready`, the response includes `"auth": "demo_only"` when `demo_mode` is `False`, and `"auth": "demo"` when `demo_mode` is `True`.
+- **Fail-Closed Token Minting Outside Demo Mode (`backend/api/app.py`)**:
+  - `POST /v1/auth/staff-token` returns HTTP `404 ENDPOINT_NOT_FOUND` outside demo mode.
+  - `POST /v1/auth/shopper-magic-link` records the delivery request without returning any token or `magic_link_url` (HTTP `202 ACCEPTED`).
+  - `POST /v1/agent/tokens` requires an authenticated shopper principal (`401 AUTH_REQUIRED`).
+  - Verified no endpoint mints or returns tokens outside demo mode.
+- **Explicit Scope Declarations & RTM Tracking (`README.md`, `docs/sandbox-tests.md`, `docs/gates/final-acceptance.md`, `docs/rtm.csv`, `scripts/sync_rtm.py`)**:
+  - Updated [`README.md`](file:///c:/Users/renal/Downloads/ProofReturn/README.md) under "Demo Boundaries & Known Limitations" with explicit declaration: staff login and magic-link delivery are `DEFERRED` (reason: out of scope for hackathon prototype release, date: `2026-11-07`, owner: `Security & Identity Workstream`).
+  - Added "Non-Demo Authentication and Identity Provider (`RV3-05`, `API-04`)" section to [`docs/sandbox-tests.md`](file:///c:/Users/renal/Downloads/ProofReturn/docs/sandbox-tests.md) declaring `DEFERRED` status.
+  - Updated [`docs/gates/final-acceptance.md`](file:///c:/Users/renal/Downloads/ProofReturn/docs/gates/final-acceptance.md) with formal gate declaration for `RV3-05` / `API-04` under `DEFERRED` Change Control.
+  - Updated [`docs/rtm.csv`](file:///c:/Users/renal/Downloads/ProofReturn/docs/rtm.csv) and [`scripts/sync_rtm.py`](file:///c:/Users/renal/Downloads/ProofReturn/scripts/sync_rtm.py): `FR-81` status set to `DEFERRED` (with note indicating non-demo staff login/auth is deferred per `RV3-05`/`API-04`); `NFR-11` and `INV-12` notes updated to document that external non-demo identity provider integration is `DEFERRED`.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t6_demo_mode_only_auth.py`)**:
+  - Authored and verified 3 TDD tests (red -> green):
+    1. `test_ready_reports_demo_only_outside_demo_and_logs_startup_warning`
+    2. `test_no_endpoint_returns_a_token_outside_demo`
+    3. `test_demo_mode_retains_token_minting_with_bootstrap_key`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t6_demo_mode_only_auth.py -v`: **3 passed in 1.35s**.
+- `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.
+- `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
+- `uv run pytest -m "not sandbox and not live_model"`: **244 passed, 4 deselected, 0 failed in 45.53s (100% pass rate)**.
+
+

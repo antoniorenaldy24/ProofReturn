@@ -2,6 +2,22 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.40] — 2026-11-07 (Session 40 / Round 4 Task T6 — Declare Hackathon Release as DEMO_MODE Only)
+
+### Hackathon DEMO_MODE Boundary Declaration and Deferred Non-Demo Auth (RV3-05 MEDIUM, API-04)
+- **Runtime Startup Warning & Readiness Probe Auth Mode (`backend/api/app.py`)**:
+  - `create_app` emits warning `AUTH_NOT_AVAILABLE_OUTSIDE_DEMO` when `demo_mode=False`.
+  - `GET /v1/ready` includes `"auth": "demo_only"` outside demo mode, and `"auth": "demo"` in demo mode.
+- **Fail-Closed Token Minting Outside Demo Mode (`backend/api/app.py`)**:
+  - `POST /v1/auth/staff-token` returns `404 ENDPOINT_NOT_FOUND` outside demo mode.
+  - `POST /v1/auth/shopper-magic-link` records delivery requests without returning tokens or URLs (`202 ACCEPTED`).
+  - `POST /v1/agent/tokens` requires an authenticated shopper principal (`401 AUTH_REQUIRED`).
+- **Explicit Scope Declarations in Documentation & Gate Records (`README.md`, `docs/sandbox-tests.md`, `docs/gates/final-acceptance.md`, `docs/rtm.csv`, `scripts/sync_rtm.py`)**:
+  - Plainly declared that staff login via external IdP and shopper magic-link email delivery are `DEFERRED` (reason: out of scope for hackathon prototype release, date: `2026-11-07`, owner: `Security & Identity Workstream`).
+  - Updated `docs/rtm.csv` and `scripts/sync_rtm.py`: `FR-81` status marked `DEFERRED` with non-demo auth notes; `NFR-11` and `INV-12` notes updated to document that external non-demo identity provider integration is `DEFERRED`.
+- **TDD & Gate Verification (`backend/tests/remediation/test_remediation_r4_t6_demo_mode_only_auth.py`)**:
+  - 3/3 new T6 tests passing; full suite 244 passed, 4 deselected, 0 failed; `python scripts/check_antipatterns.py` exits `0` with 0 findings; `python scripts/check_refs.py` passes XR-01..XR-10.
+
 ## [1.2.1-dev.39] — 2026-11-07 (Session 39 / Round 4 Task T5 — Reject Webhooks Without ID; Bounded Outbox Retries with Escalation)
 
 ### Mandatory Webhook Event ID & Bounded Outbox Retries with Escalation (RV3-04 LOW, RV3-12 LOW)

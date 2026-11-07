@@ -19,3 +19,12 @@
 | ST-11 | Two simultaneous refund requests with the same `PayPal-Request-Id` | Second request treated as `IN_FLIGHT`; exactly one refund exists | CT-08, FX-17 | `IMPLEMENTED` | 2026-11-04 | Command: `uv run pytest backend/tests/remediation/test_remediation_tahap11_outbox_executor.py::test_executor_twice_never_double_refunds`<br>Outcome: Passed in 0.42s. Atomic claim with `FOR UPDATE SKIP LOCKED` and SUBMITTED state prevents duplicate execution. |
 | ST-12 | Refund behavior with low merchant Sandbox balance and refund fee behavior | Error names documented (`FX-18`); fee recorded for ROI (`A-19`) | Section 24, 11.6 | `IMPLEMENTED` | 2026-11-04 | Command: `uv run pytest backend/tests/payments/test_payments_and_failures.py::test_all_20_financial_failure_modes_fx01_to_fx20`<br>Outcome: Passed in 1.55s. FX-18 failure handling and ROI model refund fee penalty verified. |
 | ST-13 | Dispute resolved in buyer's favor after a partial refund (reversal webhook) | Reversal event observed; ledger freezes; no further refunds | FR-75 | `IMPLEMENTED` | 2026-11-04 | Command: `uv run pytest backend/tests/payments/test_payments_and_failures.py::test_webhook_deduplication_monotonicity_and_dispute_freeze`<br>Outcome: Passed in 1.25s. Dispute reversal webhook freezes order tranches and prevents further refunds. |
+
+---
+
+## Non-Demo Authentication and Identity Provider (`RV3-05`, `API-04`)
+
+- **Status**: `DEFERRED` (Change Control decision per Section 14.1 / SSOT Table 14.1)
+- **Reason**: Out of scope for hackathon prototype release. The hackathon release is strictly declared as `DEMO_MODE` only. Outside `DEMO_MODE`, the application refuses to mint tokens without credentials, logs `AUTH_NOT_AVAILABLE_OUTSIDE_DEMO`, and reports `"auth": "demo_only"` on `/v1/ready`. Full IdP integration (SSO/OAuth2/OIDC with MFA for staff) and transactional email infrastructure (SMTP/SES for single-use magic-link tokens) are deferred to production milestone.
+- **Date**: 2026-11-07
+- **Owner**: Security & Identity Workstream

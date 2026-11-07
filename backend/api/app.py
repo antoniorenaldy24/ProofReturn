@@ -218,6 +218,12 @@ def create_app(
     )
     if is_demo:
         repo.seed_demo_data()
+    else:
+        # R4-T6 (RV3-05 MEDIUM, API-04): Hackathon release is declared DEMO_MODE only
+        logger.warning(
+            "AUTH_NOT_AVAILABLE_OUTSIDE_DEMO: Authentication outside DEMO_MODE is not available; "
+            "staff login and shopper magic-link delivery are deferred for hackathon release (RV3-05, API-04)."
+        )
 
     # R4-T4 (RV3-06, INV-11, FR-10): Validate all stored policies against SSOT jurisdiction caps at startup
     startup_policy_logger = logging.getLogger("proofreturn.policy")
@@ -416,6 +422,7 @@ def create_app(
                 "database_connected": db_ok,
                 "active_alerts_count": len(fired_alerts),
                 "demo_mode": is_demo,
+                "auth": "demo" if is_demo else "demo_only",
             },
         )
 

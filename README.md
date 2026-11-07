@@ -67,6 +67,13 @@ ProofReturn is a fair, evidence-based returns engine built on PayPal Sandbox and
 - **Calibration Profile**: The demo uses an illustrative calibration profile (`CALIBRATION_PROFILE=illustrative`), visibly badged in the UI and simulator (`Section 8.8`).
 - **Seeded Demo Accounts**: Demo `TRUSTED` and `ESTABLISHED` shopper profiles use seeded history (`SIMULATED`) and are labeled in the UI.
 - **Carrier Events**: Carrier first-scan and exception events in the demo use a labeled mock stand-in (`MOCK`, `FR-96`).
+- **Authentication Outside DEMO_MODE (`RV3-05`, `API-04`)**:
+  - The hackathon release is declared strictly as **DEMO_MODE only**.
+  - **Status**: `DEFERRED`
+  - **Reason**: Production identity provider integration (staff login via external SSO/OAuth2/OIDC with MFA) and transactional email infrastructure (shopper magic-link delivery via SMTP/SES with single-use hashed tokens) are out of scope for the hackathon prototype release.
+  - **Date**: 2026-11-07
+  - **Owner**: Security & Identity Workstream
+  - **Runtime Behavior**: When `DEMO_MODE=false`, the application logs startup warning `AUTH_NOT_AVAILABLE_OUTSIDE_DEMO`, reports `"auth": "demo_only"` on `GET /v1/ready`, and fails closed without returning any authentication tokens.
 - **Residual Risks (`R-15`–`R-26`)**: Long-con custody exposure is bounded (not eliminated) by value-weighted caps (`R-15`); small adjacent biases are detected gradually by the CUSUM monitor (`R-16`, `R-26`); keep-offer harvesting is bounded by `(1 - θ_h) * k_max` and frequency caps (`R-17`); network-wide trust across merchants (`RM-01`) is a roadmap item (`NOT-AVAILABLE`).
 
 ---

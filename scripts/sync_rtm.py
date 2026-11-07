@@ -160,7 +160,7 @@ STATUS_UPDATES: dict[str, tuple[str, str, str, str, str]] = {
         "backend/tests/api/test_api_authz_and_mcp.py::test_authorization_matrix_az01_to_az10",
         f"{EV_S2};{EV_R2}",
         "test_authorization_matrix_az01_to_az10",
-        "Verified: zero trust tenant isolation with HMAC-SHA256 bearer tokens and object-level scoping (TZ-01, TZ-04, TZ-06)",
+        "Verified: zero trust tenant isolation with HMAC-SHA256 bearer tokens and object-level scoping (TZ-01, TZ-04, TZ-06); production external IdP login DEFERRED per RV3-05/API-04",
     ),
     "INV-01": (
         "VERIFIED",
@@ -202,7 +202,7 @@ STATUS_UPDATES: dict[str, tuple[str, str, str, str, str]] = {
         "backend/tests/api/test_api_authz_and_mcp.py::test_authorization_matrix_az01_to_az10",
         f"{EV_S2};{EV_R2}",
         "test_authorization_matrix_az01_to_az10;test_agent_token_issuance_and_operational_endpoint_guards",
-        "Verified: cryptographically signed token engine (HS256) enforcing tenant isolation, role matrix AZ-01..AZ-10, BOLA guards, and signature verification (AUD-21, AUD-22, AUD-25, AUD-41)",
+        "Verified: cryptographically signed token engine (HS256) enforcing tenant isolation, role matrix AZ-01..AZ-10, BOLA guards, and signature verification (AUD-21, AUD-22, AUD-25, AUD-41); non-demo staff login and magic-link delivery DEFERRED (RV3-05, API-04)",
     ),
     "INV-16": (
         "VERIFIED",
@@ -241,7 +241,7 @@ STATUS_UPDATES: dict[str, tuple[str, str, str, str, str]] = {
     "FR-62": ("IMPLEMENTED", "-", EV_S1, "test_mv17_cusum_account_monitor", "Unit: CUSUM account monitoring implemented"),
     "FR-65": ("IMPLEMENTED", "-", EV_S5, "test_ocr_forensics_nonce_retakes_and_output_guard", "Unit: unreadable vs mismatched nonce handled differently"),
     "FR-78": ("IMPLEMENTED", "-", EV_S1, "test_mv18_keep_offer_posted_price_and_no_bounds", "Unit: keep-offer inventory release implemented"),
-    "FR-81": ("IMPLEMENTED", "-", EV_S2, "test_api_contracts_idempotency_judge_mode_and_demo_guards", "Unit: cursor pagination contracts implemented"),
+    "FR-81": ("DEFERRED", "-", EV_S2, "test_api_contracts_idempotency_judge_mode_and_demo_guards", "DEFERRED: Non-demo authentication (staff login & magic link) deferred per RV3-05/API-04; demo clock active in DEMO_MODE"),
     "FR-84": ("IMPLEMENTED", "-", EV_S1, "test_golden_e5_eu_new_infeasible_routes_standard", "Unit: jurisdiction tables for F and curves implemented"),
     "FR-87": ("IMPLEMENTED", "-", EV_S1, "test_golden_e1_trusted_r0_declared_b", "Unit: closed-form X_max constraint solver implemented"),
     "FR-88": ("IMPLEMENTED", "-", EV_S1, "test_mv19_and_mv22_standard_routing_and_refile", "Unit: standard routing and refile rules implemented"),

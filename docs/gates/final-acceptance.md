@@ -16,3 +16,13 @@
 | **G4 Feature freeze** | Nov 9 | All P0 FRs VERIFIED; P1 VERIFIED or DEGRADED/DEFERRED; AZ suite passes; threat tests pass; zero open SEV1/SEV2; clean-env run | **PASSED** | Date: 2026-11-04.<br>Command: `uv run python scripts/check_antipatterns.py && uv run pytest -m "not sandbox and not live_model"`<br>Outcome: Anti-pattern gate reports 0 anti-patterns (0 literal True guards, 0 fabricated statuses, 0 fallback prices); full test suite 189 passed in 25.87s; secret scanner passed (0 leaks across 245 files); CI gate made blocking. |
 | **G5 Demo ready** | Nov 10 | Demo journeys J-01..J-14 pass 3x in deployed env; perf and a11y budgets pass; reset script restores state < 5m; backup drill | **PASSED** | Date: 2026-11-04.<br>Command: `npm test && uv run pytest backend/tests/remediation/test_remediation_tahap12_schedulers.py`<br>Outcome: Node.js frontend test suite 6/6 passed; FastAPI lifespan schedulers (SLA escalation, keep-offer expiry, CUSUM drift, alerts, outbox) running with distributed leader lease; fail-closed demo tokens with `X-Demo-Bootstrap-Key`. |
 | **G6 Submission** | Nov 11 | Section 18 checklist complete; Section 49 FA-01..FA-11 protocol signed; video uploaded; repo public; secrets rotated | **PENDING** | Date: 2026-11-04.<br>Preconditions G0–G5 fully verified; awaiting final user submission instruction. |
+
+---
+
+## Authentication & Production Identity Status (`RV3-05`, `API-04`)
+
+- **Scope Declaration**: The hackathon release is officially declared as **DEMO_MODE only**.
+- **Status**: `DEFERRED` (Change Control decision under Section 14.1 / SSOT Table 14.1)
+- **Reason**: Out of scope for hackathon prototype release. The remaining gap is production identity provider integration (staff login via external SSO/OAuth2/OIDC with MFA) and transactional email infrastructure (shopper magic-link delivery via SMTP/SES with single-use hashed tokens). Outside `DEMO_MODE`, the application logs startup warning `AUTH_NOT_AVAILABLE_OUTSIDE_DEMO`, reports `"auth": "demo_only"` on `/v1/ready`, and all token-issuance endpoints fail closed.
+- **Date**: 2026-11-07
+- **Owner**: Security & Identity Workstream
