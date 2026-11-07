@@ -477,19 +477,21 @@ class DatabaseRepository:
         with self.get_session() as session:
             return session.get(Policy, policy_version)
 
-    def list_policies(self, merchant_id: str | None = None) -> list[Policy]:
+    def list_policies(self, merchant_id: str | None = None, *, include_inactive: bool = False) -> list[Policy]:
         with self.get_session() as session:
             stmt = select(Policy)
             if merchant_id:
                 stmt = stmt.where(Policy.merchant_id == merchant_id)
+            if not include_inactive:
+                stmt = stmt.where(Policy.is_active == True)  # noqa: E712
             return list(session.exec(stmt).all())
 
     def save_policy(self, policy: Policy) -> Policy:
         with self._lock, self.get_session() as session:
-            session.add(policy)
+            merged = session.merge(policy)
             session.commit()
-            session.refresh(policy)
-            return policy
+            session.refresh(merged)
+            return merged
 
     def get_return(self, return_id: str) -> Return | None:
         with self.get_session() as session:

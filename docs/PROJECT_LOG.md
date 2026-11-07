@@ -1240,5 +1240,32 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run pytest -m "not sandbox and not live_model"`: **234 passed, 4 deselected, 0 failed in 36.40s (100% pass rate)**.
 - `python scripts/check_antipatterns.py`: **0 findings in `"guard variable ... defaults to True"` (1 remaining finding in `backend/api/app.py`: random fallback for provider event id)**.
 
+---
+
+## [2026-11-07] Session 38 — Round 4 Task T4: Enforce Jurisdiction Caps (RV3-06 MEDIUM, INV-11, FR-10)
+
+### 1. Key Accomplishments
+- **Single Jurisdiction Curve & Fee Validation Function (`backend/policy_engine/caps.py`)**:
+  - Implemented `JurisdictionCapViolationError` (typed error carrying `field`, `jurisdiction`, and `errors`) and `validate_curve_for_jurisdiction(policy, jurisdiction, *, settlement_f_minor=None)` backed by the SSOT table (`config/jurisdiction_table.json`).
+  - Validates that for every grade `g`, payout fraction `r(g) >= 1 - diminished_value_caps[g]` (including `r_b_min` and `r_b_override`), `0 <= r(g) <= 1`, and monotonicity `r(A) >= r(B) >= r(C) >= r(D)`.
+  - Enforces `F = 0` (`phi == 0`, `return_shipping_minor == 0`, `fee_f_minor == 0`, `settlement_f_minor == 0`) where `misdeclaration_cost_allowed` is `false` (`EU` and `ID`), and `phi <= phi_max` where allowed (`US`).
+- **API Policy Creation Validation & Startup Stored Policy Audit (`backend/api/app.py`, `backend/db/models.py`, `backend/db/repository.py`, `backend/migrations/versions/0005_policy_is_active.py`)**:
+  - Added `is_active` (`BOOLEAN NOT NULL DEFAULT TRUE`) to `policies` via Alembic migration `0005_policy_is_active`.
+  - Updated `POST /v1/policies` to validate the curve and fee fields with `validate_curve_for_jurisdiction`, returning HTTP `422 JURISDICTION_CAP_VIOLATION` with field-level `field` and `errors` on any violation.
+  - Added startup policy validation in `create_app`: validates all existing stored policies via `validate_curve_for_jurisdiction`, logs warnings for any violations, and marks violating policies `is_active = False`.
+- **Defense-in-Depth Engine Enforcement (`backend/policy_engine/release.py`, `backend/policy_engine/settlement.py`, `backend/api/app.py`)**:
+  - Both `decide_release` and `settle_return` call `validate_curve_for_jurisdiction` at entry and raise `JurisdictionCapViolationError` on any violation (which the API translates into HTTP `409 JURISDICTION_CAP_VIOLATION`).
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t4_jurisdiction_caps.py`)**:
+  - Authored and verified 4 TDD tests (red -> green):
+    1. `test_each_ssot_jurisdiction_accepts_compliant_and_rejects_exceeding_cap` (`US`, `EU`, `ID`)
+    2. `test_runtime_probe_c_050_is_rejected_regression` (regression test for `C = 0.50` probe vs legal `holdback_minor == 6000`)
+    3. `test_eu_and_id_reject_any_non_zero_f`
+    4. `test_startup_validates_stored_policies_marks_inactive_and_api_returns_409`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t4_jurisdiction_caps.py -v`: **4 passed in 1.41s**.
+- `uv run pytest -m "not sandbox and not live_model"`: **238 passed, 4 deselected, 0 failed (100% pass rate)**.
+
+
 
 

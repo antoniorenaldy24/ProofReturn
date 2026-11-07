@@ -42,6 +42,9 @@ class SettlementResult:
 
 def settle_return(inp: SettlementInput, policy: PolicyConfig) -> SettlementResult:
     """Section 8.4 & FR-23, FR-28, FR-32, FR-73, INV-01, INV-10, INV-15: Compute final settlement tranches and status effects."""
+    from backend.policy_engine.caps import validate_curve_for_jurisdiction
+
+    validate_curve_for_jurisdiction(policy, policy.jurisdiction, settlement_f_minor=inp.f_minor)
     # FR-32: Two-way fairness: merchant claim that item is worse than declared requires check-in/audit evidence
     effective_grade = inp.verified_grade if inp.has_merchant_evidence else inp.declared_grade
 

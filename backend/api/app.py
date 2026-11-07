@@ -119,6 +119,11 @@ from backend.payments.ledger import (
     compute_deterministic_request_id,
 )
 from backend.payments.webhooks import WebhookProcessor
+from backend.policy_engine.caps import (
+    JurisdictionCapViolationError,
+    normalize_jurisdiction_code,
+    validate_curve_for_jurisdiction,
+)
 from backend.policy_engine.keep_offer import KeepOfferInput, compute_posted_keep_offer
 from backend.policy_engine.release import ReleaseInput, apply_fallback_degradation, decide_release
 from backend.policy_engine.settlement import SettlementInput, settle_return
@@ -129,18 +134,28 @@ from sim.roi import compute_merchant_roi
 ALLOWED_AGENT_SCOPES = {"read_policy", "declare", "keep_offer", "read_return"}
 
 
-def _problem(status: int, code: str, title: str, detail: str) -> JSONResponse:
+def _problem(
+    status: int,
+    code: str,
+    title: str,
+    detail: str,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> JSONResponse:
     """Construct an RFC 9457 application/problem+json response (Section 28.2)."""
+    content: dict[str, Any] = {
+        "type": f"https://proofreturn.dev/problems/{code.lower().replace('_', '-')}",
+        "title": title,
+        "status": status,
+        "detail": detail,
+        "code": code,
+    }
+    if extra:
+        content.update(extra)
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": f"https://proofreturn.dev/problems/{code.lower().replace('_', '-')}",
-            "title": title,
-            "status": status,
-            "detail": detail,
-            "code": code,
-        },
+        content=content,
     )
 
 
@@ -203,6 +218,60 @@ def create_app(
     )
     if is_demo:
         repo.seed_demo_data()
+
+    # R4-T4 (RV3-06, INV-11, FR-10): Validate all stored policies against SSOT jurisdiction caps at startup
+    startup_policy_logger = logging.getLogger("proofreturn.policy")
+    for stored_pol in repo.list_policies(include_inactive=True):
+        try:
+            validate_curve_for_jurisdiction(stored_pol, stored_pol.jurisdiction)
+        except JurisdictionCapViolationError as exc:
+            startup_policy_logger.warning(
+                "Stored policy %s violates jurisdiction %s (%s); marking policy inactive.",
+                stored_pol.policy_version,
+                stored_pol.jurisdiction,
+                exc,
+            )
+            stored_pol.is_active = False
+            cfg_copy = dict(stored_pol.config_json or {})
+            cfg_copy["is_active"] = False
+            cfg_copy["inactive_reason"] = str(exc)
+            stored_pol.config_json = cfg_copy
+            repo.save_policy(stored_pol)
+
+    def _policy_config_from_db_policy(pol: Policy | None) -> PolicyConfig:
+        if pol is None:
+            return PolicyConfig.default_us()
+        if not pol.is_active:
+            raise JurisdictionCapViolationError(
+                f"Policy '{pol.policy_version}' is inactive due to jurisdiction cap violation.",
+                field="policy_version",
+                jurisdiction=pol.jurisdiction,
+            )
+        j_code = normalize_jurisdiction_code(pol.jurisdiction)
+        cfg = pol.config_json or {}
+        raw_curve = cfg.get("curve")
+        if isinstance(raw_curve, dict) and raw_curve:
+            curve_json = {str(k): str(v) for k, v in raw_curve.items()}
+            if "DEF" not in curve_json:
+                curve_json["DEF"] = "1.00"
+        else:
+            curve_json = (
+                dict(PolicyConfig.default_eu().curve_json)
+                if j_code == "EU"
+                else dict(PolicyConfig.default_us().curve_json)
+            )
+        phi_str = str(cfg.get("phi", "0.00" if j_code in {"EU", "ID"} else "0.05"))
+        ret_ship = int(cfg.get("return_shipping_minor", 0 if j_code in {"EU", "ID"} else 1200))
+        fee_f = cfg.get("fee_f_minor", cfg.get("f_minor"))
+        if fee_f is not None and int(fee_f) > 0 and j_code in {"EU", "ID"}:
+            ret_ship = max(ret_ship, int(fee_f))
+        return PolicyConfig(
+            version=pol.policy_version,
+            jurisdiction=pol.jurisdiction,
+            curve_json=curve_json,
+            phi=phi_str,
+            return_shipping_minor=ret_ship,
+        )
 
     is_scheduler_enabled = getattr(resolved_settings, "enable_scheduler", True)
     scheduler_interval = getattr(resolved_settings, "scheduler_interval_seconds", 60.0)
@@ -1039,9 +1108,14 @@ def create_app(
             account_cap_remaining_minor=account_cap_remaining_minor,
             merchant_cap_remaining_minor=merchant_cap_remaining_minor,
         )
-        policy_cfg = PolicyConfig.default_us()
         calib_cfg = _illustrative_calib(ret.declared_grade or "B")
-        release_dec = decide_release(release_inp, policy_cfg, calib_cfg)
+        try:
+            policy_cfg = _policy_config_from_db_policy(
+                repo.get_policy(order.policy_version) if order else None
+            )
+            release_dec = decide_release(release_inp, policy_cfg, calib_cfg)
+        except JurisdictionCapViolationError as exc:
+            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
 
         # AUD-15 & INV-18: Connect failure detection / degraded mode fallback (§31.3)
         fb_code = request.headers.get("x-fallback-degradation")
@@ -1567,19 +1641,25 @@ def create_app(
         order = repo.get_order(ret.order_id)
         price = order.capture_amount_minor if order else 38000
 
-        # Execute real Settlement calculation through Policy Engine (AUD-01)
-        settle_inp = SettlementInput(
-            price_minor=price,
-            capture_amount_minor=price,
-            declared_grade=ret.declared_grade or "B",
-            verified_grade=req_body.verified_grade,
-            x_released_minor=ret.r0_tranche_minor,
-            holdback_minor=5700,
-            f_minor=1900,
-            human_confirmed_gross=(req_body.outcome != "DOWNGRADED"),
-            has_merchant_evidence=True,
-        )
-        settle_res = settle_return(settle_inp, PolicyConfig.default_us())
+        # Execute real Settlement calculation through Policy Engine (AUD-01, R4-T4)
+        try:
+            policy_cfg = _policy_config_from_db_policy(
+                repo.get_policy(order.policy_version) if order else None
+            )
+            settle_inp = SettlementInput(
+                price_minor=price,
+                capture_amount_minor=price,
+                declared_grade=ret.declared_grade or "B",
+                verified_grade=req_body.verified_grade,
+                x_released_minor=ret.r0_tranche_minor,
+                holdback_minor=5700,
+                f_minor=policy_cfg.compute_f_minor(price),
+                human_confirmed_gross=(req_body.outcome != "DOWNGRADED"),
+                has_merchant_evidence=True,
+            )
+            settle_res = settle_return(settle_inp, policy_cfg)
+        except JurisdictionCapViolationError as exc:
+            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
 
         # Persist Review and settlement RefundAction atomically (AUD-29, J-06, INV-01, RV2-04)
         rev_id = f"rev_{uuid.uuid4().hex[:8]}"
@@ -2307,13 +2387,43 @@ def create_app(
         body_dict = await request.json()
         req_body = CreatePolicyRequest.model_validate(body_dict)
 
+        j_code = normalize_jurisdiction_code(req_body.jurisdiction)
+        default_curve = {
+            "A": 1.0,
+            "B": 1.0 if j_code == "EU" else 0.95,
+            "C": 0.80,
+            "D": 0.50,
+            "DEF": 1.0,
+        }
+        cfg_json: dict[str, Any] = {"curve": req_body.curve or default_curve}
+        if req_body.phi is not None:
+            cfg_json["phi"] = req_body.phi
+        if req_body.return_shipping_minor is not None:
+            cfg_json["return_shipping_minor"] = req_body.return_shipping_minor
+        if req_body.fee_f_minor is not None:
+            cfg_json["fee_f_minor"] = req_body.fee_f_minor
+        if req_body.f_minor is not None:
+            cfg_json["f_minor"] = req_body.f_minor
+
+        try:
+            validate_curve_for_jurisdiction(cfg_json, req_body.jurisdiction)
+        except JurisdictionCapViolationError as exc:
+            return _problem(
+                422,
+                "JURISDICTION_CAP_VIOLATION",
+                "Unprocessable Entity",
+                str(exc),
+                extra={"field": exc.field, "errors": exc.errors},
+            )
+
         pver = req_body.policy_version or f"pol_{uuid.uuid4().hex[:8]}"
         policy_rec = Policy(
             policy_version=pver,
             merchant_id=principal.merchant_id,
             jurisdiction=req_body.jurisdiction,
             return_window_days=req_body.return_window_days,
-            config_json={"curve": req_body.curve or {"A": 1.0, "B": 0.95, "C": 0.80, "D": 0.50}},
+            is_active=True,
+            config_json=cfg_json,
         )
         repo.save_policy(policy_rec)
 
@@ -2353,27 +2463,23 @@ def create_app(
         req_body = SimulateRequest.model_validate(body_dict)
 
         merchant_policies = repo.list_policies(principal.merchant_id)
-        if merchant_policies:
-            p_obj = merchant_policies[0]
-            curve_val = p_obj.config_json.get("curve") if p_obj.config_json else None
-            policy = PolicyConfig(
-                jurisdiction=p_obj.jurisdiction,
-                policy_version=p_obj.policy_version,
-                return_window_days=p_obj.return_window_days,
-                curve=curve_val or {"A": 1.0, "B": 0.95, "C": 0.80, "D": 0.50},
-            )
-        else:
-            policy = PolicyConfig.default_us()
+        try:
+            if merchant_policies:
+                policy = _policy_config_from_db_policy(merchant_policies[0])
+            else:
+                policy = PolicyConfig.default_us()
 
-        sim_t0 = time.perf_counter()
-        calib = _illustrative_calib(req_body.declared_grade)
-        inp = ReleaseInput(
-            price_minor=req_body.price_minor,
-            declared_grade=req_body.declared_grade,
-            tier=req_body.tier,
-            has_origin_passport=req_body.has_origin_passport,
-        )
-        res = decide_release(inp, policy, calib)
+            sim_t0 = time.perf_counter()
+            calib = _illustrative_calib(req_body.declared_grade)
+            inp = ReleaseInput(
+                price_minor=req_body.price_minor,
+                declared_grade=req_body.declared_grade,
+                tier=req_body.tier,
+                has_origin_passport=req_body.has_origin_passport,
+            )
+            res = decide_release(inp, policy, calib)
+        except JurisdictionCapViolationError as exc:
+            return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
 
         # Run direct settlement rule simulation episode (FR-52, FR-102)
         import random

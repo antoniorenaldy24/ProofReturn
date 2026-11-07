@@ -90,6 +90,7 @@ class Policy(SQLModel, table=True):
     )
     jurisdiction: str = Field(default="US_CA")
     return_window_days: int = Field(default=30)
+    is_active: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, default=True))
     config_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=_utc_now)
 

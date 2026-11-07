@@ -139,6 +139,9 @@ def decide_release(
     calib: CalibrationInput,
 ) -> ReleaseDecision:
     """Section 8.6 ALGORITHM decide_release (v2.1)."""
+    from backend.policy_engine.caps import validate_curve_for_jurisdiction
+
+    validate_curve_for_jurisdiction(policy, policy.jurisdiction)
     r_gd = policy.grade_fraction(inp.declared_grade)
     declared_refund_minor = floor_fraction_to_int(Fraction(inp.price_minor) * r_gd)
     adj_grade = ADJACENT_GRADE_BELOW.get(inp.declared_grade)

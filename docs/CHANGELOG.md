@@ -2,6 +2,20 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.38] — 2026-11-07 (Session 38 / Round 4 Task T4 — Enforce Jurisdiction Caps)
+
+### SSOT Jurisdiction Cap Enforcement Across API, Startup, and Engine (RV3-06 MEDIUM, INV-11, FR-10, FR-84)
+- **Single Jurisdiction Validation Function (`backend/policy_engine/caps.py`)**:
+  - Added `JurisdictionCapViolationError` and `validate_curve_for_jurisdiction(policy, jurisdiction, *, settlement_f_minor=None)` validating curves and fees against `config/jurisdiction_table.json` (`US`, `EU`, `ID`), enforcing diminished-value deduction caps, `r_b_min` / `r_b_override`, curve monotonicity, `phi <= phi_max`, and `F = 0` where `misdeclaration_cost_allowed` is `false` (`EU`, `ID`).
+- **Policy Creation & Startup Validation (`backend/api/app.py`, `backend/db/models.py`, `backend/db/repository.py`, `backend/migrations/versions/0005_policy_is_active.py`)**:
+  - Added `is_active` column to `policies` (`0005_policy_is_active`).
+  - `POST /v1/policies` rejects policies violating their jurisdiction with HTTP `422 JURISDICTION_CAP_VIOLATION` and field-level error details (`field`, `errors`).
+  - `create_app` validates all stored policies at startup, logs violations, and marks violating policies `is_active = False`.
+- **Defense-in-Depth Engine Validation (`backend/policy_engine/release.py`, `backend/policy_engine/settlement.py`, `backend/api/app.py`)**:
+  - `decide_release` and `settle_return` call `validate_curve_for_jurisdiction` and raise `JurisdictionCapViolationError`, which API endpoints turn into HTTP `409 JURISDICTION_CAP_VIOLATION`.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t4_jurisdiction_caps.py`)**:
+  - 4/4 new T4 tests (including the `C = 0.50` runtime probe regression test) passing; full suite 238 passed, 4 deselected, 0 failed.
+
 ## [1.2.1-dev.37] — 2026-11-07 (Session 37 / Round 4 Task T3 — Fail-Closed Guards and Passport Tier from Value Band)
 
 ### Fail-Closed Guards & Value-Band Passport Tier Selection (RV3-14 MEDIUM, RV3-03 LOW, RV3-07 LOW, FR-63, FR-65)

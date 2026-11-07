@@ -145,6 +145,10 @@ class CreatePolicyRequest(StrictRequestModel):
     policy_version: str | None = None
     return_window_days: int = Field(30, ge=1)
     curve: dict[str, float] | None = None
+    phi: float | str | None = None
+    fee_f_minor: int | None = None
+    f_minor: int | None = None
+    return_shipping_minor: int | None = None
 
 
 class DemoClockRequest(StrictRequestModel):
