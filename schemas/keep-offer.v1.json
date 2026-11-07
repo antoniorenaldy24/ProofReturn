@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofreturn.dev/schemas/keep-offer.v1.json",
+  "title": "KeepOffer",
+  "description": "Posted-price Keep-Offer schema (F-08, F-10, FR-37, FR-46, FR-78). Single posted price; accept or decline only; internal bounds never exposed.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "keep_offer_id",
+    "return_id",
+    "posted_price",
+    "status",
+    "expires_at",
+    "allowed_actions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "keep_offer_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "return_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "posted_price": {
+      "type": "object",
+      "required": ["amount_minor", "currency"],
+      "properties": {
+        "amount_minor": { "type": "integer", "minimum": 1 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "string",
+      "enum": ["OFFERED", "ACCEPTED", "DECLINED", "EXPIRED"]
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["accept", "decline"]
+      },
+      "uniqueItems": true
+    },
+    "co2e_avoided_kg_estimate": {
+      "type": ["number", "null"],
+      "description": "Factor-based estimate of avoided reverse-logistics emissions (FR-38, labeled estimate)."
+    }
+  },
+  "additionalProperties": false
+}

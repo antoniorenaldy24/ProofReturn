@@ -1,0 +1,42 @@
+[project]
+name = "proofreturn"
+version = "1.2.1"
+description = "Fair, evidence-based returns — speed earned through trust and proof. Agent-ready, PayPal-native."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.27.0",
+    "sympy>=1.13.0",
+    "pynacl>=1.6.2",
+    "uvicorn>=0.54.0",
+    "sqlmodel>=0.0.48",
+    "alembic>=1.20.1",
+    "psycopg[binary]>=3.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "hypothesis>=6.115.0",
+    "ruff>=0.7.0",
+    "jsonschema>=4.23.0",
+    "pyyaml>=6.0.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = [".", "backend"]
+addopts = "-m 'not live_model and not sandbox'"
+markers = [
+    "req(id): requirement traceability marker (Section 23.1 RT-02)",
+    "sandbox: requires live PayPal Sandbox credentials (DUR-07)",
+    "live_model: requires live AI model API keys (DUR-07)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

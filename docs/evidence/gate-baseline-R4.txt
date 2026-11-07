@@ -1,0 +1,8 @@
+FAIL backend\api\app.py:1150: guard variable 'exposure_cap_ok' defaults to True (fail-open)
+FAIL backend\api\app.py:954: guard variable 'challenge_valid' defaults to True (fail-open)
+FAIL backend\api\app.py:2161: fabricated provider id
+FAIL backend\api\app.py:2458: random fallback for provider event id
+FAIL backend\db\repository.py:311: fabricated provider id
+FAIL backend\payments\outbox.py:57: fabricated provider id
+0 marker(s) (guard-verified / demo-seed-only) to review manually
+6 anti-pattern(s) found

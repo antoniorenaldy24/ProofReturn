@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofreturn.dev/schemas/condition-passport.v1.json",
+  "title": "ConditionPassport",
+  "description": "Machine-readable Condition Passport schema (F-01, F-09, F-10, FR-44). Aligned with UCP/ACP extension models.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "passport_id",
+    "tier",
+    "product",
+    "origin_grade",
+    "accessories",
+    "manifest_hash",
+    "signature",
+    "signing_key_id",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "passport_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "order_id": {
+      "type": "string"
+    },
+    "paypal_order_id": {
+      "type": "string"
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["FULL", "LITE", "NONE"]
+    },
+    "product": {
+      "type": "object",
+      "required": ["sku", "category", "serialized"],
+      "properties": {
+        "sku": { "type": "string" },
+        "category": { "type": "string", "enum": ["headphones", "camera_lens", "sneakers", "other"] },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "serialized": { "type": "boolean" },
+        "serial_hash": {
+          "type": ["string", "null"],
+          "description": "Salted SHA-256 hash of serial/IMEI (FR-03, INV-13); never plaintext."
+        }
+      },
+      "additionalProperties": true
+    },
+    "origin_grade": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D", "DEF"]
+    },
+    "current_grade": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D", "DEF"]
+    },
+    "origin_weight_g": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "functional_baseline_recorded": {
+      "type": "boolean",
+      "description": "True when packing station recorded power-on and one-function baseline for FULL electronics (FR-98)."
+    },
+    "accessories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku_part", "present"],
+        "properties": {
+          "sku_part": { "type": "string" },
+          "present": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "media_manifests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "sha256"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["PHOTO", "VIDEO", "MICRO_FEATURE", "FUNCTIONAL_TEST", "SEAL_PHOTO"] },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "c2pa_verified": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded Ed25519 signature over manifest_hash (FR-05)."
+    },
+    "signing_key_id": {
+      "type": "string"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "type", "payload_hash", "prev_hash", "hash", "created_at"],
+        "properties": {
+          "event_id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "ORIGIN_PACKED",
+              "DELIVERY_CONFIRMED",
+              "RETURN_DECLARED",
+              "CHECKIN_COMPLETED",
+              "AUDIT_COMPLETED",
+              "SETTLED",
+              "DISPOSITION_DECIDED",
+              "OWNERSHIP_TRANSFERRED"
+            ]
+          },
+          "payload_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "prev_hash": { "type": ["string", "null"] },
+          "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,44 @@
+# ProofReturn Model Configuration Registry (Section 7.1, DEP-03)
+schema_version: "1.0"
+active_profile: "gemini"
+
+roles:
+  condition_grader_primary:
+    model_id: "gemini-3.6-flash"
+    provider: "gemini"
+    prompt_id: "PR-GRADE-v3"
+    timeout_photo_s: 15
+    timeout_video_s: 30
+    fallback_role: "condition_grader_secondary"
+  condition_grader_secondary:
+    model_id: "gemini-3.6-flash"
+    provider: "gemini"
+    prompt_id: "PR-GRADE-v3"
+    timeout_photo_s: 15
+    timeout_video_s: 30
+  nonconformity_scorer:
+    model_id: "dinov2-vitb14-ordinal-v2.1"
+    provider: "local_worker"
+    scorer_version: "2.1.0"
+  intake_and_explanation_agent:
+    model_id: "gemini-3.6-flash"
+    provider: "gemini"
+    prompt_id: "PR-INTAKE-v2"
+    fallback_model_id: "gemini-3.6-flash"
+  high_volume_triage:
+    model_id: "gemini-3.6-flash"
+    provider: "gemini"
+    prompt_id: "PR-TRIAGE-v1"
+  escalation_summarizer:
+    model_id: "gemini-3.6-flash"
+    provider: "gemini"
+    prompt_id: "PR-REVIEW-v1"
+  ocr_engine:
+    model_id: "paddleocr-v2.8-en"
+    provider: "local_worker"
+  visual_identity_embeddings:
+    model_id: "dinov2-vitb14-reg4"
+    provider: "local_worker"
+  valuation_model:
+    model_id: "lightgbm-resale-v1.2"
+    provider: "local_worker"

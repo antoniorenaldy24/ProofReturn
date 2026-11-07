@@ -1,0 +1,73 @@
+FAIL backend\api\app.py:211: broad exception swallowed with pass
+FAIL backend\api\app.py:907: broad exception swallowed with pass
+FAIL backend\api\app.py:1389: broad exception swallowed with pass
+FAIL backend\api\app.py:727: guard 'authorized' passed as literal True
+FAIL backend\api\app.py:727: guard 'consent_recorded' passed as literal True
+FAIL backend\api\app.py:928: guard 'within_window' passed as literal True
+FAIL backend\api\app.py:928: guard 'authorized' passed as literal True
+FAIL backend\api\app.py:928: guard 'consent_recorded' passed as literal True
+FAIL backend\api\app.py:937: guard 'challenge_valid' passed as literal True
+FAIL backend\api\app.py:937: guard 'retakes_ok' passed as literal True
+FAIL backend\api\app.py:944: guard 'assessment_exists' passed as literal True
+FAIL backend\api\app.py:1525: 'chain_valid' hardcoded to True
+FAIL backend\api\app.py:1613: 'chain_valid' hardcoded to True
+FAIL backend\api\app.py:1640: 'chain_valid' hardcoded to True
+FAIL backend\api\app.py:737: guard 'authorized' passed as literal True
+FAIL backend\api\app.py:737: guard 'consent_recorded' passed as literal True
+FAIL backend\api\app.py:950: guard 'assessment_exists' passed as literal True
+FAIL backend\api\app.py:2202: guard 'seal_nonce_matches' passed as literal True
+FAIL backend\api\app.py:2202: guard 'source_authentic' passed as literal True
+FAIL backend\api\app.py:956: guard 'challenge_valid' passed as literal True
+FAIL backend\api\app.py:956: guard 'retakes_ok' passed as literal True
+FAIL backend\api\app.py:1083: 'verified' hardcoded to True
+FAIL backend\api\app.py:1090: 'verified' hardcoded to True
+FAIL backend\api\app.py:1265: guard 'evidence_complete' passed as literal True
+FAIL backend\api\app.py:1265: guard 'challenge_valid' passed as literal True
+FAIL backend\api\app.py:1265: guard 'retakes_ok' passed as literal True
+FAIL backend\api\app.py:1266: guard 'assessment_exists' passed as literal True
+FAIL backend\api\app.py:1267: guard 'eligible' passed as literal True
+FAIL backend\api\app.py:1268: guard 'not_expired' passed as literal True
+FAIL backend\api\app.py:1282: guard 'eligible' passed as literal True
+FAIL backend\api\app.py:1285: guard 'eligible' passed as literal True
+FAIL backend\api\app.py:2207: guard 'seal_nonce_matches' passed as literal True
+FAIL backend\api\app.py:2207: guard 'source_authentic' passed as literal True
+FAIL backend\api\app.py:1270: guard 'eligible' passed as literal True
+FAIL backend\api\app.py:1271: guard 'not_expired' passed as literal True
+FAIL backend\api\app.py:1273: guard 'eligible' passed as literal True
+FAIL backend\api\app.py:1274: guard 'not_expired' passed as literal True
+FAIL backend\api\app.py:207: fabricated capture id
+FAIL backend\api\app.py:894: fabricated capture id
+FAIL backend\api\app.py:902: fabricated capture id
+FAIL backend\api\app.py:916: fabricated capture id
+FAIL backend\api\app.py:1178: hardcoded keep-offer fallback price
+FAIL backend\api\app.py:1376: fabricated capture id
+FAIL backend\api\app.py:1384: fabricated capture id
+FAIL backend\api\app.py:1398: fabricated capture id
+FAIL backend\api\app.py:2046: hardcoded latency metric
+FAIL backend\api\app.py:2099: client-controlled webhook signature header
+FAIL backend\api\app.py:2373: demo mode forced at module level
+FAIL backend\db\repository.py:289: fabricated capture id
+FAIL backend\domain\journeys.py:76: guard 'exposure_cap_ok' passed as literal True
+FAIL backend\domain\journeys.py:78: guard 'seal_nonce_matches' passed as literal True
+FAIL backend\domain\journeys.py:78: guard 'source_authentic' passed as literal True
+FAIL backend\domain\journeys.py:114: guard 'eligible' passed as literal True
+FAIL backend\domain\journeys.py:115: guard 'not_expired' passed as literal True
+FAIL backend\domain\return_state.py:405: guard 'evidence_complete' passed as literal True
+FAIL backend\domain\return_state.py:405: guard 'challenge_valid' passed as literal True
+FAIL backend\domain\return_state.py:405: guard 'retakes_ok' passed as literal True
+FAIL backend\domain\return_state.py:432: guard 'not_expired' passed as literal True
+FAIL backend\domain\return_state.py:454: guard 'within_extended_grace' passed as literal True
+FAIL backend\domain\return_state.py:467: guard 'reviewer_authorized' passed as literal True
+FAIL backend\domain\return_state.py:478: guard 'within_appeal_window' passed as literal True
+FAIL backend\domain\return_state.py:408: guard 'evidence_complete' passed as literal True
+FAIL backend\domain\return_state.py:408: guard 'challenge_valid' passed as literal True
+FAIL backend\domain\return_state.py:408: guard 'retakes_ok' passed as literal True
+FAIL backend\domain\return_state.py:470: guard 'reviewer_authorized' passed as literal True
+FAIL backend\jobs\automation.py:43: guard 'sla_exceeded' passed as literal True
+FAIL backend\payments\client.py:171: payment status 'COMPLETED' fabricated
+FAIL backend\payments\client.py:250: payment status 'COMPLETED' fabricated
+FAIL backend\payments\client.py:154: fabricated capture id
+FAIL backend\payments\client.py:172: fabricated capture id
+FAIL backend\payments\webhooks.py:70: fabricated capture id
+0 guard-verified marker(s) to review manually
+71 anti-pattern(s) found

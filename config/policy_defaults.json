@@ -1,0 +1,72 @@
+{
+  "version": "v2.1-default-us",
+  "jurisdiction": "US",
+  "curve_json": {
+    "A": "1.00",
+    "B": "0.95",
+    "C": "0.80",
+    "D": "0.50",
+    "DEF": "1.00"
+  },
+  "phi": "0.05",
+  "return_shipping_minor": 1200,
+  "mu": "0.05",
+  "p_min": "0.05",
+  "p_max": "0.25",
+  "p_std": "0.25",
+  "rho_stress": "0.30",
+  "beta_leak": "0.02",
+  "alpha_route": "0.10",
+  "alpha_accuse": "0.02",
+  "value_bands_json": {
+    "LOW_MAX_MINOR": 15000,
+    "MID_MAX_MINOR": 60000
+  },
+  "timing_matrix_json": {
+    "TRUSTED": { "LOW": "R0", "MID": "R0", "HIGH": "R1" },
+    "ESTABLISHED": { "LOW": "R0", "MID": "R1", "HIGH": "R2" },
+    "NEW": { "LOW": "R2", "MID": "R2", "HIGH": "R2" },
+    "RESTRICTED": { "LOW": "STANDARD", "MID": "STANDARD", "HIGH": "STANDARD" }
+  },
+  "tier_L_json": {
+    "NEW": 0,
+    "ESTABLISHED": 2000,
+    "TRUSTED": 4000,
+    "RESTRICTED": 0
+  },
+  "tier_caps_json": {
+    "NEW": 0,
+    "NEW_COUNTER_VERIFIED": 10000,
+    "ESTABLISHED": 25000,
+    "TRUSTED": 100000,
+    "RESTRICTED": 0
+  },
+  "kappa": "1.50",
+  "aggregate_cap_minor": 500000,
+  "velocity_json": {
+    "max_open_pre_checkin_per_group": 2,
+    "max_accounts_per_address_30d_fast": 3
+  },
+  "theta_h": "0.30",
+  "promotion_rules_json": {
+    "new_to_established": {
+      "min_clean_returns": 2,
+      "min_verified_value_minor": 15000,
+      "min_account_age_days": 30,
+      "kept_orders_per_credit": 3,
+      "kept_orders_min_value_minor": 30000,
+      "max_kept_order_credits": 1
+    },
+    "established_to_trusted": {
+      "min_clean_returns": 5,
+      "min_verified_value_minor": 75000,
+      "min_account_age_days": 90,
+      "audited_confirmed_multiplier": 2,
+      "max_kept_order_credits": 2
+    },
+    "restricted_to_new": {
+      "min_clean_standard_returns": 3,
+      "min_account_age_days": 180
+    }
+  }
+}

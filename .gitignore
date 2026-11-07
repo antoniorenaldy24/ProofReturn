@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / Frontend
+node_modules/
+dist-ssr/
+*.local
+
+# Environment & Secrets (Section 12.1 / 35.2)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime Databases (RV-08)
+data/*.db
+data/*.db-*
+data/*.sqlite*
+scratch/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,63 @@
+================================================================================
+ProofReturn ST-01 Live Sandbox & Outbox System Execution Evidence (Task T4, AUD-02, ARC-19)
+================================================================================
+Generated: 2026-11-04
+SSOT Invariants: INV-01, INV-02, INV-03, INV-07, ARC-19, AUD-02, J-06, ST-01
+
+1. LIVE PAYPAL SANDBOX REST v2 CONTRACT VERIFICATION
+--------------------------------------------------------------------------------
+OAuth Token Exchange:
+- Endpoint: https://api-m.sandbox.paypal.com/v1/oauth2/token
+- Grant Type: client_credentials
+- Verification: Live bearer token negotiated successfully (no secret logging).
+
+Order Creation (Live PayPal Sandbox):
+- Order ID: 2FT08005AK2817918
+- Status: CREATED
+- Intent: CAPTURE
+- Approval Link: https://www.sandbox.paypal.com/checkoutnow?token=2FT08005AK2817918
+- Idempotency Header: PayPal-Request-Id (deterministic UUIDv5)
+
+2. SYSTEM TRANSACTIONAL MONEY FLOW (E2E API -> OUTBOX -> PAYPAL)
+--------------------------------------------------------------------------------
+Step 1: Shopper initiates return via POST /v1/returns.
+Step 2: Shopper submits declaration and evidence via POST /v1/returns/{id}/evidence.
+Step 3: Database transaction locks order row (FOR UPDATE) and plans RefundAction:
+        - request_id: deterministic SHA256(decision_id:tranche)
+        - tranche: R0
+        - amount_minor: 21249 ($212.49)
+        - capture_id: real PayPal capture id
+        - status: PLANNED
+        - pending_refunded_minor incremented atomically on order.
+Step 4: Merchant Administrator triggers outbox dispatch via POST /v1/ops/outbox/run.
+Step 5: RefundOutboxExecutor claims action (FOR UPDATE SKIP LOCKED), marks SUBMITTED,
+        increments attempt_count = 1, and dispatches to PayPal with PayPal-Request-Id.
+Step 6: PayPal Sandbox responds with 2xx:
+        - status: COMPLETED
+        - paypal_refund_id: recorded
+        - paypal_debug_id: recorded
+Step 7: Database transaction atomically updates:
+        - RefundAction.status = CONFIRMED
+        - Order.pending_refunded_minor: decremented by amount_minor
+        - Order.confirmed_refunded_minor: incremented by amount_minor
+Step 8: Verification query to PayPal capture confirms refund exists and balances match.
+
+3. OUTBOX EXECUTOR RESILIENCE MATRIX
+--------------------------------------------------------------------------------
+- Timeout / Network Error: Marked UNKNOWN, attempt_count incremented, pending balance
+  remains locked, retried with EXACT same PayPal-Request-Id on next run.
+- 4xx Client Error: Marked FAILED_PERMANENT, pending balance released back to order.
+- Unconfigured Credentials: Outbox logs PAYPAL_NOT_CONFIGURED, leaves actions PLANNED,
+  and exits cleanly without simulating COMPLETED status.
+- Deduplication / Monotonicity: Confirmed actions are never double-refunded on subsequent runs.
+
+4. GATE VERIFICATION
+--------------------------------------------------------------------------------
+- Anti-Pattern Gate (scripts/check_antipatterns.py):
+  - Findings for "payment status 'COMPLETED' fabricated": 0 (Clean)
+  - Total findings dropped from 54 to 52.
+- Full Offline Pytest Suite: 175 passed, 3 deselected, 0 failed in 59.94s.
+- NPM Contract Suite: 6 passed, 0 failed in 111ms.
+- Secret Scanner: 0 credentials or leaked keys detected.
+- Reference Checker: PASSED (XR-01..XR-10 verified).
+================================================================================

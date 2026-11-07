@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofreturn.dev/schemas/return-declaration.v1.json",
+  "title": "ReturnDeclaration",
+  "description": "Machine-readable Return Declaration schema for human and AI agent submissions (F-03, F-10, FR-12, FR-44, FR-95).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "order_id",
+    "declared_grade",
+    "accessories",
+    "reason_code",
+    "consent_fast_lane_terms",
+    "nonce_shopper",
+    "actor"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "order_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "declared_grade": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D", "DEF"]
+    },
+    "accessories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku_part", "present"],
+        "properties": {
+          "sku_part": { "type": "string" },
+          "present": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "reason_code": {
+      "type": "string",
+      "enum": ["CHANGED_MIND", "WRONG_SIZE_FIT", "DEFECTIVE_ON_ARRIVAL", "NOT_AS_DESCRIBED", "OTHER"]
+    },
+    "reason_text": {
+      "type": ["string", "null"],
+      "maxLength": 1000
+    },
+    "consent_fast_lane_terms": {
+      "type": "boolean",
+      "const": true
+    },
+    "nonce_shopper": {
+      "type": "string",
+      "minLength": 8,
+      "description": "Client-generated random nonce (base64 or hex) mixed into the commit-reveal audit seed (FR-95)."
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["human", "agent"] },
+        "agent_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "functional_self_test_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Required for DEF declarations on electronics to avoid automatic routing to STANDARD (FR-68)."
+    }
+  },
+  "additionalProperties": true
+}

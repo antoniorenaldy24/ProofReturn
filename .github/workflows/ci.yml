@@ -1,0 +1,90 @@
+name: ProofReturn CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  verify:
+    name: Lint, Secret Scan, Cross-Refs & Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Project Dependencies
+        run: uv sync --frozen
+
+      - name: Run Secret & Credential Scanner (AUD-38, TM-12)
+        run: uv run python scripts/scan_secrets.py
+
+      - name: Verify Specification Cross-References (XR-01..XR-10)
+        run: uv run python scripts/check_refs.py
+
+      - name: Verify RTM Traceability Synchronization (Section 20.1)
+        run: uv run python scripts/sync_rtm.py
+
+      - name: Execute Pytest Suite (Unit, Property & Integration)
+        run: uv run pytest -v -m "not live_model and not sandbox" --tb=short
+
+      - name: Run Anti-Pattern Gate v2 (Audit Baseline R4)
+        run: uv run python scripts/check_antipatterns.py
+
+      - name: Verify Docker Container Build (AUD-07, AUD-38)
+        run: docker build -t proofreturn-api:ci -f infra/Dockerfile .
+
+  postgres-integration:
+    name: Postgres Migrations & API Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proofreturn
+          POSTGRES_PASSWORD: proofreturn_ci_pw
+          POSTGRES_DB: proofreturn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Project Dependencies
+        run: uv sync --frozen
+
+      - name: Run Alembic Migrations against Postgres
+        env:
+          DATABASE_URL: postgresql+psycopg://proofreturn:proofreturn_ci_pw@localhost:5432/proofreturn_test
+        run: uv run alembic upgrade head
+
+      - name: Execute Pytest API Tests against Postgres
+        env:
+          DATABASE_URL: postgresql+psycopg://proofreturn:proofreturn_ci_pw@localhost:5432/proofreturn_test
+        run: uv run pytest backend/tests/api backend/tests/remediation -v -m "not live_model and not sandbox" --tb=short

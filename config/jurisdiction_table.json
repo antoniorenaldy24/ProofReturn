@@ -1,0 +1,59 @@
+{
+  "default_unknown_jurisdiction": "EU",
+  "jurisdictions": {
+    "US": {
+      "name": "United States (demo default)",
+      "r_b_override": null,
+      "r_b_min": "0.95",
+      "diminished_value_caps": {
+        "A": "0.00",
+        "B": "0.05",
+        "C": "0.20",
+        "D": "0.50",
+        "DEF": "0.00"
+      },
+      "misdeclaration_cost_allowed": true,
+      "return_shipping_minor": 1200,
+      "phi_max": "0.05",
+      "settlement_deadline_days": 14,
+      "escalated_deadline_hold_max_days": 30,
+      "escalated_deadline_rule": "RELEASE_UNDISPUTED_HOLD_REMAINDER"
+    },
+    "EU": {
+      "name": "European Union",
+      "r_b_override": "1.00",
+      "r_b_min": "1.00",
+      "diminished_value_caps": {
+        "A": "0.00",
+        "B": "0.00",
+        "C": "0.20",
+        "D": "0.50",
+        "DEF": "0.00"
+      },
+      "misdeclaration_cost_allowed": false,
+      "return_shipping_minor": 0,
+      "phi_max": "0.00",
+      "settlement_deadline_days": 14,
+      "escalated_deadline_hold_max_days": 14,
+      "escalated_deadline_rule": "RELEASE_FULL_AT_STATUTORY_DEADLINE"
+    },
+    "ID": {
+      "name": "Indonesia",
+      "r_b_override": null,
+      "r_b_min": "0.95",
+      "diminished_value_caps": {
+        "A": "0.00",
+        "B": "0.05",
+        "C": "0.20",
+        "D": "0.50",
+        "DEF": "0.00"
+      },
+      "misdeclaration_cost_allowed": false,
+      "return_shipping_minor": 0,
+      "phi_max": "0.00",
+      "settlement_deadline_days": 14,
+      "escalated_deadline_hold_max_days": 30,
+      "escalated_deadline_rule": "RELEASE_UNDISPUTED_HOLD_REMAINDER"
+    }
+  }
+}

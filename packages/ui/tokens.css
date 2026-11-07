@@ -1,0 +1,57 @@
+/* ProofReturn Visual Design System Tokens (Section 39.2)
+ * Enforces DP-01..DP-05 and WCAG 2.2 AA contrast ratios (Section 41.2, A11Y-01)
+ */
+
+:root {
+  --color-bg: #FAFAF7;
+  --color-surface: #FFFFFF;
+  --color-text: #14171F;
+  --color-text-muted: #5B6270;
+  --color-border: #E3E5E8;
+  --color-primary: #0F766E;
+  --color-success: #15803D;
+  --color-pending: #B45309;
+  --color-hold: #4338CA;
+  --color-escalated: #C2410C;
+  --color-danger: #B91C1C;
+  --color-info: #1D4ED8;
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-input: 6px;
+  --radius-card: 10px;
+  --radius-sheet: 16px;
+  --radius-badge: 9999px;
+}
+
+[data-theme="dark"] {
+  --color-bg: #0E1116;
+  --color-surface: #161B22;
+  --color-text: #E8EAED;
+  --color-text-muted: #9BA3AF;
+  --color-border: #2A313B;
+  --color-primary: #2DD4BF;
+  --color-success: #4ADE80;
+  --color-pending: #FBBF24;
+  --color-hold: #A5B4FC;
+  --color-escalated: #FB923C;
+  --color-danger: #F87171;
+  --color-info: #93C5FD;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

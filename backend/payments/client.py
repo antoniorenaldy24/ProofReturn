@@ -1,0 +1,285 @@
+"""Non-custodial PayPal Sandbox REST v2 client and startup environment guard (INV-07, TM-16, Section 24.1)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+ALLOWED_SANDBOX_BASE_URLS: set[str] = {
+    "https://api-m.sandbox.paypal.com",
+    "https://api.sandbox.paypal.com",
+}
+
+
+def validate_paypal_sandbox_url(base_url: str) -> None:
+    """Reject non-Sandbox PayPal URLs at startup (TM-16)."""
+    normalized = base_url.rstrip("/")
+    if normalized not in ALLOWED_SANDBOX_BASE_URLS:
+        raise ValueError(
+            f"TM-16 startup guard failed: PayPal base URL '{base_url}' is not a valid PayPal Sandbox endpoint."
+        )
+
+
+class PayPalSandboxClient:
+    """Strictly non-custodial PayPal Sandbox client (INV-07: Orders v2, Captures, Refunds, Webhooks only; NO Payouts)."""
+
+    def __init__(
+        self,
+        base_url: str = "https://api-m.sandbox.paypal.com",
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        timeout_seconds: float = 15.0,
+    ) -> None:
+        validate_paypal_sandbox_url(base_url)
+        self.base_url = base_url.rstrip("/")
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self.timeout_seconds = timeout_seconds
+
+    @property
+    def has_credentials(self) -> bool:
+        """True if PayPal Sandbox client ID and client secret are both provided."""
+        return bool(self._client_id and self._client_secret)
+
+    def fetch_oauth_token(self) -> dict[str, Any]:
+        """Exchange Sandbox client credentials for an OAuth2 access token without logging secrets."""
+        if not self._client_id or not self._client_secret:
+            raise ValueError("PayPal Sandbox client_id and client_secret are required for live OAuth.")
+        url = f"{self.base_url}/v1/oauth2/token"
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.post(
+                url,
+                auth=(self._client_id, self._client_secret),
+                data={"grant_type": "client_credentials"},
+                headers={"Accept": "application/json", "Accept-Language": "en_US"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "token_type": data.get("token_type", "Bearer"),
+                "expires_in": data.get("expires_in", 0),
+                "access_token_present": bool(data.get("access_token")),
+                "_access_token": data.get("access_token", ""),
+            }
+
+    def create_order_live(
+        self,
+        *,
+        custom_id: str,
+        request_id: str,
+        amount_minor: int,
+        currency: str = "USD",
+    ) -> dict[str, Any]:
+        """Create a real Order v2 on PayPal Sandbox using OAuth2 and PayPal-Request-Id."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        value_str = f"{amount_minor / 100:.2f}"
+        url = f"{self.base_url}/v2/checkout/orders"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "PayPal-Request-Id": request_id,
+        }
+        payload = {
+            "intent": "CAPTURE",
+            "purchase_units": [
+                {
+                    "custom_id": custom_id,
+                    "amount": {
+                        "currency_code": currency,
+                        "value": value_str,
+                    },
+                }
+            ],
+        }
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "id": data.get("id"),
+                "status": data.get("status"),
+                "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
+            }
+
+    def create_order(
+        self,
+        *,
+        custom_id: str,
+        amount_minor: int,
+        currency: str = "USD",
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a PayPal Order v2 (live if credentials configured, simulated when offline)."""
+        if self._client_id and self._client_secret and request_id:
+            return self.create_order_live(
+                custom_id=custom_id,
+                request_id=request_id,
+                amount_minor=amount_minor,
+                currency=currency,
+            )
+        return {
+            "id": f"PAYPAL-ORD-{custom_id}",
+            "status": "CREATED",
+            "amount_minor": amount_minor,
+            "currency": currency,
+        }
+
+    def capture_order_live(
+        self,
+        *,
+        paypal_order_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Capture an approved PayPal Order v2 via live PayPal Sandbox API (AUD-02)."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        url = f"{self.base_url}/v2/checkout/orders/{paypal_order_id}/capture"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        if request_id:
+            headers["PayPal-Request-Id"] = request_id
+
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.post(url, headers=headers, json={})
+            resp.raise_for_status()
+            data = resp.json()
+            capture_id = ""
+            capture_status = data.get("status", "")
+            pu = data.get("purchase_units", [])
+            if pu:
+                captures = pu[0].get("payments", {}).get("captures", [])
+                if captures:
+                    capture_id = captures[0].get("id", "")
+                    capture_status = captures[0].get("status", capture_status)
+            if not capture_id:
+                raise ValueError("PayPal order capture response missing capture ID")
+            return {
+                "id": capture_id,
+                "order_id": data.get("id", paypal_order_id),
+                "status": capture_status,
+                "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
+            }
+
+    def capture_order(
+        self,
+        *,
+        paypal_order_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Capture an approved PayPal Order v2 (live if credentials configured, fail-closed otherwise; AUD-02, ARC-19)."""
+        if not self.has_credentials:
+            raise RuntimeError("PAYPAL_NOT_CONFIGURED: PayPal credentials not configured; live capture cannot execute.")
+        return self.capture_order_live(paypal_order_id=paypal_order_id, request_id=request_id)
+
+    def refund_capture_live(
+        self,
+        *,
+        capture_id: str,
+        request_id: str,
+        amount_minor: int,
+        currency: str = "USD",
+        invoice_id: str | None = None,
+        custom_id: str | None = None,
+        note_to_payer: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute a real partial/full capture refund via PayPal Sandbox API (INV-01, INV-03, AUD-02)."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        value_str = f"{amount_minor / 100:.2f}"
+        url = f"{self.base_url}/v2/payments/captures/{capture_id}/refund"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "PayPal-Request-Id": request_id,
+        }
+        payload: dict[str, Any] = {
+            "amount": {
+                "currency_code": currency,
+                "value": value_str,
+            }
+        }
+        if invoice_id:
+            payload["invoice_id"] = invoice_id
+        if custom_id:
+            payload["custom_id"] = custom_id
+        if note_to_payer:
+            payload["note_to_payer"] = note_to_payer
+
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                "id": data.get("id"),
+                "capture_id": capture_id,
+                "request_id": request_id,
+                "status": data.get("status", ""),
+                "amount_minor": amount_minor,
+                "currency": currency,
+                "invoice_id": invoice_id,
+                "custom_id": custom_id,
+                "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
+            }
+
+    def refund_capture(
+        self,
+        *,
+        capture_id: str,
+        request_id: str,
+        amount_minor: int,
+        currency: str = "USD",
+        invoice_id: str | None = None,
+        custom_id: str | None = None,
+        note_to_payer: str | None = None,
+    ) -> dict[str, Any]:
+        """Issue a partial or full capture refund with mandatory PayPal-Request-Id (INV-01, INV-02, INV-03, AUD-02)."""
+        if not self.has_credentials:
+            raise RuntimeError("PAYPAL_NOT_CONFIGURED: PayPal credentials not configured; live refund cannot execute.")
+        return self.refund_capture_live(
+            capture_id=capture_id,
+            request_id=request_id,
+            amount_minor=amount_minor,
+            currency=currency,
+            invoice_id=invoice_id,
+            custom_id=custom_id,
+            note_to_payer=note_to_payer,
+        )
+
+    def verify_webhook_signature_live(
+        self,
+        *,
+        transmission_id: str,
+        transmission_time: str,
+        cert_url: str,
+        auth_algo: str,
+        transmission_sig: str,
+        webhook_id: str,
+        webhook_event: dict[str, Any],
+    ) -> bool:
+        """Call PayPal Sandbox /v1/notifications/verify-webhook-signature to verify webhook authenticity (AUD-24)."""
+        tok = self.fetch_oauth_token()
+        access_token = tok["_access_token"]
+        url = f"{self.base_url}/v1/notifications/verify-webhook-signature"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "transmission_id": transmission_id,
+            "transmission_time": transmission_time,
+            "cert_url": cert_url,
+            "auth_algo": auth_algo,
+            "transmission_sig": transmission_sig,
+            "webhook_id": webhook_id,
+            "webhook_event": webhook_event,
+        }
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code != 200:
+                return False
+            data = resp.json()
+            return data.get("verification_status") == "SUCCESS"
