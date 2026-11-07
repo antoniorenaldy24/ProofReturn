@@ -2,6 +2,22 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.37] — 2026-11-07 (Session 37 / Round 4 Task T3 — Fail-Closed Guards and Passport Tier from Value Band)
+
+### Fail-Closed Guards & Value-Band Passport Tier Selection (RV3-14 MEDIUM, RV3-03 LOW, RV3-07 LOW, FR-63, FR-65)
+- **Fail-Closed Challenge Guard & Standard Lane Routing (`backend/api/app.py`, `backend/db/repository.py`, `backend/domain/return_state.py`)**:
+  - Initialized `challenge_valid = False` in `POST /v1/returns/{return_id}/evidence` (eliminating the fail-open `challenge_valid = True` fallback when `text_in_media` was omitted).
+  - When OCR text is provided and does not contain the stored session nonce, returns `409 INVALID_STATE_TRANSITION` with no state change.
+  - When no OCR text is available, keeps `challenge_valid = False`, routes the return to the `STANDARD` lane (`timing="R3"`) with `x_released_minor = 0` and `r0_tranche_minor = 0` (no `FAST` release or `RefundAction` row planned), and records `"CHALLENGE_NOT_VERIFIED"` in `Decision.explanation_json` and the API response.
+- **Fail-Closed Merchant Exposure Cap Guard (`backend/api/app.py`)**:
+  - Removed `exposure_cap_ok = True` initialization in `POST /v1/returns/{return_id}/dropoff`.
+  - Missing merchant row returns `409 MERCHANT_NOT_FOUND` with no state transition or seal hash write; otherwise `exposure_cap_ok` is computed from the merchant's stored exposure cap and outstanding instant exposure.
+- **Passport Tier from Order Line Value Band (`backend/api/app.py`, `backend/db/repository.py`, `backend/api/schemas.py`)**:
+  - Added `DatabaseRepository.resolve_order_line_price_minor` to look up the order line's `price_minor`.
+  - Updated `POST /v1/passports` and `POST /v1/orders/{order_id}/passport` to compute and store `tier = select_passport_tier(line_price_minor)` from the SSOT value band table (`backend/domain/passport_tier.py`), ignoring any `tier` in the request body.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t3_fail_closed_guards_and_passport_tier.py`)**:
+  - 4/4 new T3 tests passing; full suite 234 passed, 4 deselected, 0 failed; gate reports **0 findings** in `"guard variable ... defaults to True"`.
+
 ## [1.2.1-dev.36] — 2026-11-07 (Session 36 / Round 4 Task T2 — Map PayPal Refund and Capture Statuses; Never Fabricate Provider IDs)
 
 ### PayPal Refund & Capture Status Mapping and Provider ID Integrity (RV3-01 MEDIUM, RV3-02 LOW)

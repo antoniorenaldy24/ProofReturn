@@ -363,6 +363,7 @@ def test_aud34_contract_api_evidence_matches_policy_engine(tmp_path: Path) -> No
             "kind": "VIDEO_CHALLENGE",
             "object_key": "raw/ret_demo_1/challenge.mp4",
             "sha256": "d" * 64,
+            "text_in_media": repo.get_return("ret_demo_1").challenge_nonce,
             "challenge_step": 1,
             "faces_detected": 0,
             "client_blur_applied": False,

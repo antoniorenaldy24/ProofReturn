@@ -893,6 +893,7 @@ def create_app(
             "fast_lane_terms_accepted": True,
             "nonce_shopper": shopper_nonce,
             "shopper_nonce": shopper_nonce,
+            "challenge_nonce": ret.challenge_nonce,
             "actor": actor,
         }
         return JSONResponse(status_code=200, content=decl_response)
@@ -946,20 +947,23 @@ def create_app(
                 "Maximum evidence retake attempts exceeded (FR-66).",
             )
 
-        # FR-65: Verify challenge nonce found in media matches stored session nonce
+        # FR-65 & R4-T3: Verify challenge nonce found in media matches stored session nonce (fail-closed)
         stored_nonce = ret.challenge_nonce.strip().upper() if ret.challenge_nonce else ""
+        challenge_valid = False
+        challenge_not_verified = False
         if req_body.text_in_media and req_body.text_in_media.strip():
             obs_text = req_body.text_in_media.strip().upper()
-            challenge_valid = (stored_nonce in obs_text or obs_text in stored_nonce)
+            challenge_valid = bool(stored_nonce and (stored_nonce in obs_text or obs_text in stored_nonce))
+            if not challenge_valid:
+                return _problem(
+                    409,
+                    "INVALID_STATE_TRANSITION",
+                    "Conflict",
+                    "Challenge nonce mismatch between evidence and stored session nonce (FR-65).",
+                )
         else:
-            challenge_valid = True
-        if not challenge_valid:
-            return _problem(
-                409,
-                "INVALID_STATE_TRANSITION",
-                "Conflict",
-                "Challenge nonce mismatch between evidence and stored session nonce (FR-65).",
-            )
+            challenge_valid = False
+            challenge_not_verified = True
 
         from backend.ai.pipeline.evaluator import assess_return_evidence
 
@@ -1048,23 +1052,48 @@ def create_app(
                 price_minor=price,
             )
 
+        explanation_text = str(release_dec.explanation)
+        explanation_payload: dict[str, Any] = {"explanation": explanation_text}
+        effective_lane = release_dec.lane
+        effective_timing = release_dec.timing
+        effective_x_minor = release_dec.x_released_minor
+        effective_checkin_minor = release_dec.checkin_tranche_minor
+        effective_holdback_minor = release_dec.holdback_minor
+
+        if not challenge_valid:
+            effective_lane = "STANDARD"
+            effective_timing = "R3"
+            effective_x_minor = 0
+            effective_checkin_minor = 0
+            effective_holdback_minor = (
+                release_dec.x_released_minor
+                + release_dec.checkin_tranche_minor
+                + release_dec.holdback_minor
+            )
+            explanation_text = (
+                f"{explanation_text} | CHALLENGE_NOT_VERIFIED: No OCR challenge text available; "
+                "routed to STANDARD lane without FAST release."
+            )
+            explanation_payload["explanation"] = explanation_text
+            explanation_payload["reason"] = "CHALLENGE_NOT_VERIFIED"
+
         # Persist cryptographically signed Decision to DB (AUD-28)
         plat_priv, _, plat_kid = get_platform_keypair()
         dec_id = f"dec_{uuid.uuid4().hex[:8]}"
-        payload_hash = sha256_hex(f"{dec_id}:{return_id}:{release_dec.x_released_minor}")
+        payload_hash = sha256_hex(f"{dec_id}:{return_id}:{effective_x_minor}")
         sig = sign_message_ed25519(plat_priv, payload_hash)
         dec_record = Decision(
             decision_id=dec_id,
             return_id=return_id,
             policy_version=order.policy_version if order else "pol_v1_us_ca",
-            lane=release_dec.lane,
-            timing=release_dec.timing,
+            lane=effective_lane,
+            timing=effective_timing,
             audit_probability=float(release_dec.p),
-            x_minor=release_dec.x_released_minor,
-            checkin_minor=release_dec.checkin_tranche_minor,
-            holdback_minor=release_dec.holdback_minor,
+            x_minor=effective_x_minor,
+            checkin_minor=effective_checkin_minor,
+            holdback_minor=effective_holdback_minor,
             currency="USD",
-            explanation_json={"explanation": release_dec.explanation},
+            explanation_json=explanation_payload,
             signature=f"ed25519:{sig}",
         )
 
@@ -1075,14 +1104,15 @@ def create_app(
                 evidence=ev_record,
                 assessment=ass_record,
                 decision=dec_record,
-                refund_amount_minor=release_dec.x_released_minor,
+                refund_amount_minor=effective_x_minor,
                 tranche="R0",
                 paypal_debug_id=f"dbg_{dec_id[:8]}",
-                lane=release_dec.lane,
-                timing=release_dec.timing,
+                lane=effective_lane,
+                timing=effective_timing,
                 audit_probability=float(release_dec.p),
                 retakes_ok=retakes_ok,
                 challenge_valid=challenge_valid,
+                challenge_not_verified=challenge_not_verified,
             )
         except MissingCaptureError as exc:
             return _problem(409, "CAPTURE_MISSING", "Capture Missing", str(exc))
@@ -1116,20 +1146,21 @@ def create_app(
                 paypal_debug_id=r0_action.paypal_debug_id,
             )
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "return_id": return_id,
-                "accepted": True,
-                "state": ret.state,
-                "lane": release_dec.lane,
-                "timing": release_dec.timing,
-                "r0_tranche_minor": release_dec.x_released_minor,
-                "x_released_minor": release_dec.x_released_minor,
-                "holdback_minor": release_dec.holdback_minor,
-                "data_source_badge": "REPLAYED" if resolved_mode == "judge" else "LIVE",
-            },
-        )
+        resp_content: dict[str, Any] = {
+            "return_id": return_id,
+            "accepted": True,
+            "state": ret.state,
+            "lane": effective_lane,
+            "timing": effective_timing,
+            "r0_tranche_minor": effective_x_minor,
+            "x_released_minor": effective_x_minor,
+            "holdback_minor": effective_holdback_minor,
+            "explanation": explanation_text,
+            "data_source_badge": "REPLAYED" if resolved_mode == "judge" else "LIVE",
+        }
+        if not challenge_valid:
+            resp_content["reason"] = "CHALLENGE_NOT_VERIFIED"
+        return JSONResponse(status_code=200, content=resp_content)
 
     @app.post("/v1/returns/{return_id}/dropoff")
     async def record_return_dropoff(
@@ -1148,14 +1179,20 @@ def create_app(
         body_dict = await request.json()
         req_body = DropoffRequest.model_validate(body_dict)
 
-        # Dynamic exposure cap guard from database (RV-03)
+        # Dynamic exposure cap guard from database (RV-03, RV3-03, R4-T3: fail-closed)
         merchant = repo.get_merchant(ret.merchant_id)
-        exposure_cap_ok = True
-        if merchant:
-            exposure_cap_ok = (
-                merchant.outstanding_instant_exposure_minor + ret.r0_tranche_minor
-                <= merchant.instant_exposure_cap_minor
+        if not merchant:
+            return _problem(
+                409,
+                "MERCHANT_NOT_FOUND",
+                "Conflict",
+                f"Merchant record '{ret.merchant_id}' not found.",
             )
+        exposure_cap_ok = False
+        exposure_cap_ok = (
+            merchant.outstanding_instant_exposure_minor + ret.r0_tranche_minor
+            <= merchant.instant_exposure_cap_minor
+        )
 
         try:
             if ret.state == "ASSESSED":
@@ -1166,9 +1203,10 @@ def create_app(
         except InvalidStateTransitionError as exc:
             return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
 
+        ret_updated = repo.get_return(return_id) or ret
         seal_hash = hashlib.sha256(req_body.seal_nonce.encode("utf-8")).hexdigest()
-        ret.seal_nonce_hash = seal_hash
-        repo.save_return(ret)
+        ret_updated.seal_nonce_hash = seal_hash
+        repo.save_return(ret_updated)
         return JSONResponse(
             status_code=200,
             content={
@@ -1664,6 +1702,17 @@ def create_app(
         body_dict = await request.json()
         req_body = MintPassportRequest.model_validate(body_dict)
 
+        from backend.domain.passport_tier import select_passport_tier
+
+        line_price_minor = repo.resolve_order_line_price_minor(
+            merchant_id=principal.merchant_id,
+            order_id=req_body.order_id,
+            order_item_id=req_body.order_item_id,
+            sku=req_body.sku,
+            fallback_price_minor=req_body.price_minor,
+        )
+        computed_tier = select_passport_tier(line_price_minor)
+
         pid = req_body.passport_id or f"pass_{uuid.uuid4().hex[:8]}"
         packer_priv, _, packer_kid = get_packer_keypair()
 
@@ -1671,7 +1720,7 @@ def create_app(
             "passport_id": pid,
             "merchant_id": principal.merchant_id,
             "sku": req_body.sku,
-            "tier": req_body.tier,
+            "tier": computed_tier,
             "origin_grade": req_body.origin_grade,
             "weight_g": req_body.weight_g,
             "self_test_passed": req_body.self_test_passed,
@@ -1683,7 +1732,7 @@ def create_app(
             passport_id=pid,
             merchant_id=principal.merchant_id,
             sku=req_body.sku,
-            tier=req_body.tier,
+            tier=computed_tier,
             origin_grade=req_body.origin_grade,
             serial_commitment=hashlib.sha256(f"SN-{pid}".encode()).hexdigest(),
             head_hash=head_hash,
@@ -1716,7 +1765,7 @@ def create_app(
                 "passport_id": pid,
                 "merchant_id": principal.merchant_id,
                 "sku": req_body.sku,
-                "tier": req_body.tier,
+                "tier": computed_tier,
                 "origin_grade": req_body.origin_grade,
                 "weight_g": req_body.weight_g,
                 "self_test_passed": req_body.self_test_passed,
@@ -1753,7 +1802,16 @@ def create_app(
         pid = req_body.passport_id or f"pass_{order_id}"
         packer_priv, _, packer_kid = get_packer_keypair()
 
-        tier = "FULL" if order.capture_amount_minor >= 15000 else "LITE"
+        from backend.domain.passport_tier import select_passport_tier
+
+        line_price_minor = repo.resolve_order_line_price_minor(
+            merchant_id=order.merchant_id,
+            order_id=order_id,
+            order_item_id=req_body.order_item_id,
+            sku=req_body.sku,
+            fallback_price_minor=order.capture_amount_minor,
+        )
+        tier = select_passport_tier(line_price_minor)
         manifest_payload = {
             "passport_id": pid,
             "order_id": order_id,

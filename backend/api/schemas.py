@@ -71,8 +71,11 @@ class KeepOfferRespondRequest(StrictRequestModel):
 
 class MintPassportRequest(StrictRequestModel):
     passport_id: str | None = None
+    order_id: str | None = None
+    order_item_id: str | None = None
+    price_minor: int | None = None
     sku: str = Field("PR-HP-XM5", min_length=1)
-    tier: str = Field("FULL", pattern="^(FULL|LITE|NONE)$")
+    tier: str | None = Field(default=None, description="Ignored if present; tier is computed from order line value band (FR-63)")
     origin_grade: str = Field("A", pattern="^(A|B|C|D|DEF)$")
     weight_g: int = Field(250, ge=1)
     self_test_passed: bool = Field(..., description="Self-test status must be explicitly specified (no permissive default)")
@@ -80,7 +83,9 @@ class MintPassportRequest(StrictRequestModel):
 
 class OrderPassportRequest(StrictRequestModel):
     passport_id: str | None = None
+    order_item_id: str | None = None
     sku: str = Field("PR-HP-XM5", min_length=1)
+    tier: str | None = Field(default=None, description="Ignored if present; tier is computed from order line value band (FR-63)")
     origin_grade: str = Field("A", pattern="^(A|B|C|D|DEF)$")
     weight_g: int = Field(250, ge=1)
     self_test_passed: bool = Field(..., description="Self-test status must be explicitly specified (no permissive default)")

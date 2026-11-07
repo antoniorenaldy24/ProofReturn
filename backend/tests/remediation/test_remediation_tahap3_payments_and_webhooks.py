@@ -270,6 +270,7 @@ def test_j06_evidence_and_review_persists_refund_actions_in_database(repo: Datab
             "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "faces_detected": 0,
             "client_blur_applied": True,
+            "text_in_media": repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert r_ev.status_code == 200

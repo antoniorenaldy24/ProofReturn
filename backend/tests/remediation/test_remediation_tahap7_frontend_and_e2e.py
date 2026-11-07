@@ -84,6 +84,7 @@ def test_frontend_api_client_shopper_journey_e2e(repo: DatabaseRepository) -> No
             "sha256": "e" * 64,
             "faces_detected": 0,
             "client_blur_applied": True,
+            "text_in_media": repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert r_ev.status_code == 200
@@ -291,10 +292,17 @@ def test_e2e_staging_smoke_run_full_lifecycle(repo: DatabaseRepository) -> None:
     assert r_decl.status_code == 200
 
     # 5. Submit Evidence
+    created_ret = repo.get_return(ret_id)
+    assert created_ret is not None
     r_ev = client.post(
         f"/v1/returns/{ret_id}/evidence",
         headers=shopper_auth,
-        json={"sha256": "f" * 64, "faces_detected": 0, "client_blur_applied": True},
+        json={
+            "sha256": "f" * 64,
+            "faces_detected": 0,
+            "client_blur_applied": True,
+            "text_in_media": created_ret.challenge_nonce,
+        },
     )
     assert r_ev.status_code == 200
     ev_data = r_ev.json()

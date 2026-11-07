@@ -202,7 +202,7 @@ class ReturnStateMachine:
         elif event == "SUBMIT_EVIDENCE":  # #2 T-SM02
             if not (
                 guards.get("evidence_complete", False)
-                and guards.get("challenge_valid", False)
+                and (guards.get("challenge_valid", False) or (entity.lane == "STANDARD" and guards.get("challenge_not_verified", False)))
                 and guards.get("retakes_ok", False)
             ):
                 raise InvalidStateTransitionError("T-SM02 guards not satisfied.")

@@ -612,6 +612,45 @@ class DatabaseRepository:
             stmt = select(OrderItem).where(OrderItem.order_id == order_id)
             return list(session.exec(stmt).all())
 
+    def resolve_order_line_price_minor(
+        self,
+        *,
+        merchant_id: str | None = None,
+        order_id: str | None = None,
+        order_item_id: str | None = None,
+        sku: str | None = None,
+        fallback_price_minor: int | None = None,
+    ) -> int:
+        with self.get_session() as session:
+            if order_item_id:
+                item = session.get(OrderItem, order_item_id)
+                if item is not None:
+                    return int(item.price_minor)
+            if order_id:
+                items = list(session.exec(select(OrderItem).where(OrderItem.order_id == order_id)).all())
+                if sku:
+                    for it in items:
+                        if it.sku == sku:
+                            return int(it.price_minor)
+                if items:
+                    return int(items[0].price_minor)
+                order = session.get(Order, order_id)
+                if order is not None:
+                    return int(order.capture_amount_minor)
+            if sku:
+                stmt = select(OrderItem, Order).join(Order, OrderItem.order_id == Order.order_id).where(OrderItem.sku == sku)
+                if merchant_id:
+                    stmt = stmt.where(Order.merchant_id == merchant_id)
+                rows = list(session.exec(stmt).all())
+                if rows:
+                    return int(rows[-1][0].price_minor)
+                items_by_sku = list(session.exec(select(OrderItem).where(OrderItem.sku == sku)).all())
+                if items_by_sku:
+                    return int(items_by_sku[-1].price_minor)
+            if fallback_price_minor is not None:
+                return int(fallback_price_minor)
+            return 0
+
     def save_order_item(self, item: OrderItem) -> OrderItem:
         with self._lock, self.get_session() as session:
             merged = session.merge(item)
@@ -1161,17 +1200,22 @@ class DatabaseRepository:
                 return_id=ret.return_id,
                 order_id=ret.order_id,
                 state=ret.state,
-                lane=ret.lane,
-                timing=ret.timing,
+                lane=lane or ret.lane,
+                timing=timing or ret.timing,
             )
-            # Dynamic guards computed from persisted data (RV-03, Task T6)
-            within_window = transition_guards.get("within_window", True)
-            authorized = transition_guards.get("authorized", True)
-            consent_recorded = transition_guards.get("consent_recorded", True)
+            # Dynamic guards computed from persisted data (RV-03, Task T6, R4-T3)
+            pol = session.get(Policy, order.policy_version) if order else None
+            return_window_days = pol.return_window_days if pol else 30
+            now_utc = datetime.now(timezone.utc)
+            order_created = order.created_at.replace(tzinfo=timezone.utc) if (order and order.created_at) else now_utc
+            within_window = transition_guards.get("within_window", (now_utc - order_created).days <= return_window_days)
+            authorized = transition_guards.get("authorized", bool(order and ret.order_id == order.order_id))
+            consent_recorded = transition_guards.get("consent_recorded", bool(ret.consent_recorded))
             retakes_ok = transition_guards.get("retakes_ok", (ret.retake_count <= 3))
             stored_nonce = ret.challenge_nonce.strip().upper() if ret.challenge_nonce else ""
             ev_nonce = evidence.nonce_return.strip().upper() if (evidence and evidence.nonce_return) else ""
             challenge_valid = transition_guards.get("challenge_valid", (ev_nonce == stored_nonce if (ev_nonce and stored_nonce) else False))
+            challenge_not_verified = transition_guards.get("challenge_not_verified", False)
             evidence_complete = transition_guards.get("evidence_complete", bool(evidence and evidence.evidence_sha256))
             assessment_exists = transition_guards.get("assessment_exists", bool(assessment and assessment.assessment_id))
 
@@ -1189,6 +1233,7 @@ class DatabaseRepository:
                     "SUBMIT_EVIDENCE",
                     evidence_complete=evidence_complete,
                     challenge_valid=challenge_valid,
+                    challenge_not_verified=challenge_not_verified,
                     retakes_ok=retakes_ok,
                 )
                 self.state_machine.apply(

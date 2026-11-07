@@ -31,7 +31,7 @@ def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None
     assert r_pass.status_code == 201
     pass_data = r_pass.json()
     assert pass_data["order_id"] == "ord_demo_1"
-    assert pass_data["tier"] == "FULL"
+    assert pass_data["tier"] == "LITE"
     assert pass_data["chain_valid"] is True
 
     # 2. POST /v1/returns/{id}/declaration (Shopper)
@@ -64,6 +64,7 @@ def test_order_passport_declaration_evidence_dropoff_and_receipts_flow() -> None
             "faces_detected": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 19.5,
+            "text_in_media": decl_data["challenge_nonce"],
         },
     )
     assert r_ev.status_code == 200

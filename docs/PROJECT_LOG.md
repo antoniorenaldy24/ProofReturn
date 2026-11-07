@@ -1212,4 +1212,33 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run pytest -m "not sandbox and not live_model"`: **230 passed, 4 deselected, 0 failed (100% pass rate)**.
 - `python scripts/check_antipatterns.py`: **0 findings in `fabricated provider id` (1 reviewed `demo-seed-only` marker in `seed_demo_data`; 3 remaining baseline findings from T3)**.
 
+---
+
+## [2026-11-07] Session 37 — Round 4 Task T3: Fail-Closed Guards and Passport Tier from Value Band (RV3-14 MEDIUM, RV3-03 LOW, RV3-07 LOW, FR-63, FR-65)
+
+### 1. Key Accomplishments
+- **Fail-Closed Challenge Verification & Standard Lane Routing (`backend/api/app.py`, `backend/db/repository.py`, `backend/domain/return_state.py`)**:
+  - Eliminated fail-open default `challenge_valid = True` when `text_in_media` is omitted in `POST /v1/returns/{return_id}/evidence`; `challenge_valid` is initialized to `False`.
+  - When OCR text (`text_in_media`) is provided and does not contain the stored session nonce, the API returns HTTP `409 INVALID_STATE_TRANSITION` without changing return state.
+  - When no OCR text is available, `challenge_valid` remains `False`, the return is routed to the `STANDARD` lane (`timing="R3"`) with `x_released_minor = 0` and `r0_tranche_minor = 0` (no `FAST` release or `RefundAction` planned), and `"CHALLENGE_NOT_VERIFIED"` is recorded in `Decision.explanation_json` (`reason` and `explanation`) and returned in the API response.
+- **Fail-Closed Merchant Exposure Cap Guard (`backend/api/app.py`)**:
+  - Eliminated fail-open default `exposure_cap_ok = True` in `POST /v1/returns/{return_id}/dropoff`.
+  - If `repo.get_merchant(ret.merchant_id)` is missing, the endpoint returns HTTP `409 MERCHANT_NOT_FOUND` before any state transition or seal hash write.
+  - Otherwise `exposure_cap_ok` is initialized to `False` and computed from `merchant.outstanding_instant_exposure_minor + ret.r0_tranche_minor <= merchant.instant_exposure_cap_minor`.
+- **Passport Tier Computed from SSOT Value Band (`backend/api/app.py`, `backend/db/repository.py`, `backend/api/schemas.py`)**:
+  - Added `DatabaseRepository.resolve_order_line_price_minor` to resolve the order line's `price_minor` by `order_item_id`, `order_id`, or `sku`.
+  - Updated `POST /v1/passports` and `POST /v1/orders/{order_id}/passport` to compute and store `tier = select_passport_tier(line_price_minor)` using the SSOT value band table (`backend/domain/passport_tier.py`), ignoring any `tier` field supplied in the request body.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t3_fail_closed_guards_and_passport_tier.py`)**:
+  - Authored and verified 4 TDD tests (red -> green):
+    1. `test_evidence_without_text_in_media_routes_to_standard_lane_with_reason_recorded`
+    2. `test_evidence_with_mismatched_ocr_text_returns_409`
+    3. `test_dropoff_for_order_with_missing_merchant_row_returns_409_and_no_state_change`
+    4. `test_passport_created_with_tier_full_for_low_value_item_uses_value_band_tier`
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t3_fail_closed_guards_and_passport_tier.py -v`: **4 passed in 1.43s**.
+- `uv run pytest -m "not sandbox and not live_model"`: **234 passed, 4 deselected, 0 failed in 36.40s (100% pass rate)**.
+- `python scripts/check_antipatterns.py`: **0 findings in `"guard variable ... defaults to True"` (1 remaining finding in `backend/api/app.py`: random fallback for provider event id)**.
+
+
 

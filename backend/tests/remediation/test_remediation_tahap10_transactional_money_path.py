@@ -70,6 +70,7 @@ def test_over_refund_via_evidence_endpoint_returns_409_and_persists_nothing(
             "challenge_step": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 12.5,
+            "text_in_media": test_repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
 
@@ -144,6 +145,7 @@ def test_remaining_refundable_survives_app_restart(
             "challenge_step": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 12.5,
+            "text_in_media": test_repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert resp.status_code == 200
@@ -202,6 +204,7 @@ def test_pending_refunded_minor_updated_atomically(
             "challenge_step": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 12.5,
+            "text_in_media": test_repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert resp.status_code == 200
@@ -237,6 +240,7 @@ def test_refund_uses_order_capture_id(
             "challenge_step": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 12.5,
+            "text_in_media": test_repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert resp.status_code == 200
@@ -270,6 +274,7 @@ def test_missing_capture_id_blocks_planning(
             "challenge_step": 1,
             "client_blur_applied": True,
             "blur_latency_ms": 12.5,
+            "text_in_media": test_repo.get_return("ret_demo_1").challenge_nonce,
         },
     )
     assert resp.status_code == 409
@@ -359,10 +364,12 @@ def test_concurrent_planning_never_exceeds_capture(
                 order_item_id=item_id,
                 merchant_id="merch_a",
                 shopper_id="shopper_1",
-                state="REQUESTED",
+                state="DECLARED",
                 lane="FAST",
                 timing="R0",
                 declared_grade="B",
+                consent_recorded=True,
+                challenge_nonce="NONCE-DEMO-9876",
                 r0_tranche_minor=0,
                 currency="USD",
             )
@@ -379,12 +386,13 @@ def test_concurrent_planning_never_exceeds_capture(
             f"/v1/returns/{ret_id}/evidence",
             headers={"Authorization": f"Bearer {shopper_token}"},
             json={
-                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef",
                 "faces_detected": 0,
                 "object_key": f"raw_evidence/{ret_id}.mp4",
                 "challenge_step": 1,
                 "client_blur_applied": True,
                 "blur_latency_ms": 10.0,
+                "text_in_media": "NONCE-DEMO-9876",
             },
         )
         return resp.status_code
