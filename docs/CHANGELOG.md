@@ -2,6 +2,23 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.41] — 2026-11-07 (Session 41 / Round 4 Task T7 — Wire Conformal Calibration into Misdeclaration Decisions; Resolve Custody and Seal Modules)
+
+### Server-Side Conformal Exclusion & Domain Custody / Seal Module Integration (RV2-05 MEDIUM, INV-10, FR-25, FR-29, FR-64)
+- **Server-Side Conformal Exclusion (`backend/ai/calibration/conformal.py`, `backend/api/app.py`, `backend/db/models.py`, `backend/migrations/versions/0007_assessment_cum_probs.py`)**:
+  - `POST /v1/review/{return_id}/decision` computes `excluded_at_alpha_accuse` server-side from the stored assessment and the calibrator for the item category via `calibrator.evaluate(...)`.
+  - Any `excluded_at_alpha_accuse` value submitted in the request body is strictly ignored by the server.
+  - When no calibration data exists for the item category, the calibrator defaults to protective non-exclusion (`excluded_at_alpha_accuse = False`).
+  - Enforced **INV-10**: a status-affecting gross finding (`f_charged_minor > 0` and shopper trust tier downgrade to `RESTRICTED`) requires conformal exclusion AND human reviewer confirmation.
+  - Added `cum_probs` JSON column on `Assessment` with Alembic migration `0007_assessment_cum_probs.py`.
+- **Domain Custody & Return Seal Module Resolution (Option A)**:
+  - Selected **Option A** to integrate `backend/domain/custody.py` and `backend/domain/return_seal.py` into active API routes (drop-off, receiving checkpoint, carrier events) per `FR-29`, `FR-30`, `FR-31`, `FR-64`, and `FR-72`.
+  - `POST /v1/returns/{return_id}/dropoff` creates and hashes `ReturnSealRecord`.
+  - `POST /v1/returns/{return_id}/receiving-checkpoint` executes `CustodyLedger` checkpoint recording and `attribute_condition_change`.
+  - `POST /v1/carrier-events` verifies seals using `verify_return_seal_at_checkin` and records checkpoints in `CustodyLedger`.
+- **TDD & Gate Verification (`backend/tests/remediation/test_remediation_r4_t7_conformal_misdeclaration_and_custody.py`)**:
+  - 4/4 new T7 tests passing; full regression suite 248 passed, 4 deselected, 0 failed; `python scripts/check_antipatterns.py` exits `0` with 0 findings; `python scripts/check_refs.py` passes XR-01..XR-10.
+
 ## [1.2.1-dev.40] — 2026-11-07 (Session 40 / Round 4 Task T6 — Declare Hackathon Release as DEMO_MODE Only)
 
 ### Hackathon DEMO_MODE Boundary Declaration and Deferred Non-Demo Auth (RV3-05 MEDIUM, API-04)

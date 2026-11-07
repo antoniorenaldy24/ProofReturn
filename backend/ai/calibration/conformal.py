@@ -222,3 +222,49 @@ class MondrianConformalCalibrator:
             "coverage_accuse": coverage_accuse,
             "passed_ag01": passed,
         }
+
+
+_DEFAULT_CALIBRATOR: MondrianConformalCalibrator | None = None
+
+
+def get_conformal_calibrator() -> MondrianConformalCalibrator:
+    """Return the global singleton MondrianConformalCalibrator instance (RV2-05, INV-10)."""
+    global _DEFAULT_CALIBRATOR
+    if _DEFAULT_CALIBRATOR is None:
+        _DEFAULT_CALIBRATOR = MondrianConformalCalibrator(alpha_route=0.10, alpha_accuse=0.02)
+    return _DEFAULT_CALIBRATOR
+
+
+def set_conformal_calibrator(calibrator: MondrianConformalCalibrator) -> None:
+    """Explicitly inject a MondrianConformalCalibrator instance (e.g. for testing)."""
+    global _DEFAULT_CALIBRATOR
+    _DEFAULT_CALIBRATOR = calibrator
+
+
+def reset_conformal_calibrator() -> MondrianConformalCalibrator:
+    """Reset the global calibrator to a fresh empty instance."""
+    global _DEFAULT_CALIBRATOR
+    _DEFAULT_CALIBRATOR = MondrianConformalCalibrator(alpha_route=0.10, alpha_accuse=0.02)
+    return _DEFAULT_CALIBRATOR
+
+
+def derive_cum_probs(
+    predicted_grade: str,
+    conformal_set: list[str] | None = None,
+) -> dict[str, float]:
+    """Derive conservative cumulative probabilities C_hat(g | x) from predicted grade and conformal set (Section 7.5)."""
+    c_set = set(conformal_set or [predicted_grade])
+    probs: dict[str, float] = {"D": 1.0}
+    rank_pred = GRADE_TO_RANK.get(predicted_grade, 0)
+    max_c_rank = max([GRADE_TO_RANK.get(g, 0) for g in c_set] or [rank_pred])
+    for g in ("C", "B", "A"):
+        r = GRADE_TO_RANK[g]
+        if g in c_set:
+            probs[g] = 0.95
+        elif r <= max_c_rank:
+            probs[g] = 0.90
+        elif r == max_c_rank + 1:
+            probs[g] = 0.08
+        else:
+            probs[g] = 0.005
+    return probs

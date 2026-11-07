@@ -95,6 +95,10 @@ class ReviewDecisionRequest(StrictRequestModel):
     outcome: str = Field(..., min_length=1)
     verified_grade: str = Field(..., pattern="^(A|B|C|D|DEF)$")
     notes: str = ""
+    excluded_at_alpha_accuse: bool | None = Field(
+        default=None,
+        description="Ignored by server; computed server-side from calibrator (INV-10, RV2-05)",
+    )
 
 
 class ReceivingCheckpointRequest(StrictRequestModel):

@@ -7,6 +7,10 @@ from backend.ai.calibration.conformal import (
     MondrianCategoryQuantiles,
     MondrianConformalCalibrator,
     compute_conformal_quantile,
+    derive_cum_probs,
+    get_conformal_calibrator,
+    reset_conformal_calibrator,
+    set_conformal_calibrator,
 )
 from backend.ai.calibration.pooling import (
     GapCalibration,
@@ -22,6 +26,10 @@ __all__ = [
     "MondrianCategoryQuantiles",
     "MondrianConformalCalibrator",
     "compute_conformal_quantile",
+    "derive_cum_probs",
+    "get_conformal_calibrator",
+    "reset_conformal_calibrator",
+    "set_conformal_calibrator",
     "GapCalibration",
     "PooledCalibrationEstimate",
     "clopper_pearson_lower_bound",

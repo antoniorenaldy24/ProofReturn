@@ -287,6 +287,7 @@ class Assessment(SQLModel, table=True):
     )
     predicted_grade: str = Field(default="B")
     conformal_set: list[str] = Field(default_factory=lambda: ["B"], sa_column=Column(JSON, nullable=False))
+    cum_probs: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON, nullable=True))
     replay_label: str = Field(default="LIVE")
     forensic_flags: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=_utc_now)

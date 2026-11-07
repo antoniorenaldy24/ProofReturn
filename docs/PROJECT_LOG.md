@@ -1322,4 +1322,36 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
 - `uv run pytest -m "not sandbox and not live_model"`: **244 passed, 4 deselected, 0 failed in 45.53s (100% pass rate)**.
 
+---
+
+## [2026-11-07] Session 41 — Round 4 Task T7: Wire Conformal Calibration into Misdeclaration Decisions; Resolve Custody and Seal Modules (RV2-05 MEDIUM, INV-10, FR-25)
+
+### 1. Key Accomplishments
+- **Server-Side Conformal Exclusion in Review Decisions (`backend/ai/calibration/conformal.py`, `backend/ai/calibration/__init__.py`, `backend/api/app.py`, `backend/api/schemas.py`, `backend/db/models.py`, `backend/db/repository.py`, `backend/migrations/versions/0007_assessment_cum_probs.py`)**:
+  - Registered `get_conformal_calibrator()`, `set_conformal_calibrator()`, `reset_conformal_calibrator()`, and `derive_cum_probs()` in the conformal calibration module.
+  - Added optional `cum_probs: dict[str, float]` on `Assessment` with Alembic migration `0007_assessment_cum_probs.py`.
+  - In `POST /v1/review/{return_id}/decision`, the server resolves the item category from the order item / passport / SKU and computes `excluded_at_alpha_accuse` strictly server-side using the calibrator's non-conformity quantiles (`calibrator.evaluate()`).
+  - Added `excluded_at_alpha_accuse: bool | None` to `ReviewDecisionRequest` schema for backwards compatibility, but explicitly ignored it in application logic — clients cannot self-declare or force conformal exclusion.
+  - If no calibration data exists for the item category, the calibrator returns `excluded_at_alpha_accuse = False` (protective default per SSOT).
+  - Invariant **INV-10** holds end-to-end through the API: a status-affecting gross finding (`f_charged_minor > 0` and shopper trust tier override to `RESTRICTED`) requires conformal exclusion AND human reviewer confirmation.
+- **Resolution of `custody.py` and `return_seal.py` (Option A Choice & Rationale)**:
+  - **Choice**: Selected **Option A** (integrating `custody.py` and `return_seal.py` into active API handlers).
+  - **Rationale**: `FR-29`, `FR-30`, `FR-31`, `FR-64`, and `FR-72` in `docs/SSOT.md` and `docs/rtm.csv` explicitly define `backend/domain/custody.py` and `backend/domain/return_seal.py` as primary architectural modules for tamper-evident custody intervals, condition attribution, and one-time return seal issuance/verification. Deleting them would create compliance gaps against the SSOT and RTM traceability matrix; integrating them removes all dead code while providing robust, domain-driven verification across all return touchpoints.
+  - In `POST /v1/returns/{return_id}/dropoff`: integrated `ReturnSealRecord` from `backend.domain.return_seal` with origin weight tracking and SHA-256 seal nonce hashing.
+  - In `POST /v1/returns/{return_id}/receiving-checkpoint`: integrated `CustodyLedger` and `CustodyCheckpoint` from `backend.domain.custody`, computing `attribution = ledger.attribute_condition_change("B")` and returning `responsible_interval` and `weight_delta_g`.
+  - In `POST /v1/carrier-events`: integrated `verify_return_seal_at_checkin` from `backend.domain.return_seal` and `CustodyLedger` from `backend.domain.custody`.
+- **TDD Verification (`backend/tests/remediation/test_remediation_r4_t7_conformal_misdeclaration_and_custody.py`)**:
+  - Authored and verified 4 TDD tests (red -> green):
+    1. `test_reviewer_sends_excluded_true_but_calibrator_does_not_exclude_no_fee_no_restricted`: reviewer payload `excluded_at_alpha_accuse: true` is ignored; non-excluded assessment results in `f_charged_minor == 0` and no `RESTRICTED` tier.
+    2. `test_calibrator_excludes_and_reviewer_confirms_fee_and_restricted_applied`: when calibrator excludes and human confirms, `f_charged_minor > 0` and shopper tier transitions to `RESTRICTED`.
+    3. `test_category_without_calibration_data_never_excluded`: uncalibrated categories default to protective non-exclusion.
+    4. `test_custody_and_seal_modules_used_by_api`: dropoff, receiving checkpoints, and carrier events actively use `return_seal.py` and `custody.py`.
+
+### 2. Verification & Compliance
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t7_conformal_misdeclaration_and_custody.py -v`: **4 passed in 2.05s**.
+- `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.
+- `uv run python scripts/check_antipatterns.py`: **0 findings across the entire repository (`OK: no audited anti-patterns found`, exit code 0)**.
+- `uv run pytest -m "not sandbox and not live_model"`: **248 passed, 4 deselected, 0 failed in 49.38s (100% pass rate)**.
+
+
 

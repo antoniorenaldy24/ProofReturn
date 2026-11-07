@@ -93,7 +93,7 @@ def validate_curve_for_jurisdiction(
         return_shipping_val = getattr(policy, "return_shipping_minor", None)
     elif hasattr(policy, "config_json"):
         cfg = getattr(policy, "config_json", None) or {}
-        curve_raw = cfg.get("curve")
+        curve_raw = cfg.get("curve") or cfg.get("curve_json")
         phi_val = cfg.get("phi")
         return_shipping_val = cfg.get("return_shipping_minor")
         fee_f_val = cfg.get("fee_f_minor", cfg.get("f_minor"))

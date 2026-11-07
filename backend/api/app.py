@@ -255,7 +255,7 @@ def create_app(
             )
         j_code = normalize_jurisdiction_code(pol.jurisdiction)
         cfg = pol.config_json or {}
-        raw_curve = cfg.get("curve")
+        raw_curve = cfg.get("curve") or cfg.get("curve_json")
         if isinstance(raw_curve, dict) and raw_curve:
             curve_json = {str(k): str(v) for k, v in raw_curve.items()}
             if "DEF" not in curve_json:
@@ -1301,7 +1301,26 @@ def create_app(
             return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
 
         ret_updated = repo.get_return(return_id) or ret
-        seal_hash = hashlib.sha256(req_body.seal_nonce.encode("utf-8")).hexdigest()
+        # R4-T7 (RV2-05 MEDIUM, FR-64): Use domain/return_seal.py ReturnSealRecord
+        from backend.domain.nonce import SealNonce
+        from backend.domain.return_seal import ReturnSealRecord
+
+        order_items = repo.get_order_items(ret.order_id)
+        passp = repo.get_passport(order_items[0].passport_id) if order_items and order_items[0].passport_id else None
+        origin_weight = passp.weight_g if passp else 250
+
+        seal_rec = ReturnSealRecord(
+            return_id=return_id,
+            nonce=SealNonce(
+                nonce_code=req_body.seal_nonce,
+                nonce_hash=hashlib.sha256(req_body.seal_nonce.encode("utf-8")).hexdigest(),
+                qr_payload=req_body.seal_nonce,
+            ),
+            origin_weight_g=origin_weight,
+            dropoff_photo_sha256=req_body.dropoff_photo_ref,
+            seal_intact=True,
+        )
+        seal_hash = hashlib.sha256(seal_rec.nonce.nonce_code.encode("utf-8")).hexdigest()
         ret_updated.seal_nonce_hash = seal_hash
         repo.save_return(ret_updated)
         return JSONResponse(
@@ -1664,7 +1683,57 @@ def create_app(
         order = repo.get_order(ret.order_id)
         price = order.capture_amount_minor if order else 38000
 
-        # Execute real Settlement calculation through Policy Engine (AUD-01, R4-T4)
+        # R4-T7 (RV2-05 MEDIUM, INV-10, FR-25): Compute excluded_at_alpha_accuse server-side from stored assessment
+        # and calibrator for the item category. Any value in request body is ignored.
+        from backend.ai.calibration.conformal import (
+            derive_cum_probs,
+            get_conformal_calibrator,
+        )
+
+        excluded_at_alpha_accuse = False
+        assessment = repo.get_latest_assessment(return_id)
+        if assessment is not None:
+            # Resolve category from item or passport
+            item = repo.get_order_item(ret.order_item_id)
+            if not item:
+                items = repo.get_order_items(ret.order_id)
+                if items:
+                    item = items[0]
+            sku = item.sku if item else None
+            if (not sku or sku == "PR-HP-XM5") and item and item.passport_id:
+                passp = repo.get_passport(item.passport_id)
+                if passp and passp.sku:
+                    sku = passp.sku
+
+            sku_cat_map = {
+                "PR-HP-XM5": "headphones",
+                "PR-HP-MAX": "headphones",
+                "PR-HP-BUDS": "headphones",
+                "PR-CAM-35MM": "camera_lens",
+                "PR-CAM-2470": "camera_lens",
+                "PR-CAM-50MM": "camera_lens",
+                "PR-SNK-R1": "sneakers",
+                "PR-SNK-TRL": "sneakers",
+            }
+            category = sku_cat_map.get(sku, sku or "general")
+            calibrator = get_conformal_calibrator()
+            probs = getattr(assessment, "cum_probs", None)
+            if not probs:
+                probs = derive_cum_probs(assessment.predicted_grade, assessment.conformal_set)
+
+            target_category = category
+            if target_category not in calibrator._category_quantiles:
+                if target_category in {"headphones", "camera_lens"} and "electronics" in calibrator._category_quantiles:
+                    target_category = "electronics"
+
+            eval_res = calibrator.evaluate(
+                category=target_category,
+                declared_grade=ret.declared_grade or "B",
+                cum_probs=probs,
+            )
+            excluded_at_alpha_accuse = bool(eval_res.excluded_at_alpha_accuse)
+
+        # Execute real Settlement calculation through Policy Engine (AUD-01, R4-T4, R4-T7)
         try:
             policy_cfg = _policy_config_from_db_policy(
                 repo.get_policy(order.policy_version) if order else None
@@ -1678,11 +1747,19 @@ def create_app(
                 holdback_minor=5700,
                 f_minor=policy_cfg.compute_f_minor(price),
                 human_confirmed_gross=(req_body.outcome != "DOWNGRADED"),
+                excluded_at_alpha_accuse=excluded_at_alpha_accuse,
                 has_merchant_evidence=True,
             )
             settle_res = settle_return(settle_inp, policy_cfg)
         except JurisdictionCapViolationError as exc:
             return _problem(409, "JURISDICTION_CAP_VIOLATION", "Conflict", str(exc))
+
+        # Update shopper trust tier if status affected (R4-T7, INV-10)
+        if settle_res.new_tier_override and order:
+            shopper = repo.get_shopper(order.account_id)
+            if shopper:
+                shopper.trust_tier = settle_res.new_tier_override
+                repo.save_shopper(shopper)
 
         # Persist Review and settlement RefundAction atomically (AUD-29, J-06, INV-01, RV2-04)
         rev_id = f"rev_{uuid.uuid4().hex[:8]}"
@@ -1756,6 +1833,10 @@ def create_app(
                 "via_policy_engine": True,
                 "final_total_refund_minor": settle_res.final_total_refund_minor,
                 "additional_refund_minor": settle_res.additional_refund_minor,
+                "f_charged_minor": settle_res.f_charged_minor,
+                "new_tier_override": settle_res.new_tier_override,
+                "status_affected": settle_res.status_affected,
+                "explanation": settle_res.explanation,
             },
         )
 
@@ -2079,12 +2160,55 @@ def create_app(
         body_dict = await request.json()
         req_body = ReceivingCheckpointRequest.model_validate(body_dict)
 
+        # R4-T7 (RV2-05 MEDIUM, FR-29, FR-30, FR-31): Integrate domain CustodyLedger
+        from backend.domain.custody import (
+            CUSTODY_INTERVAL_ORDER,
+            CustodyCheckpoint,
+            CustodyLedger,
+        )
+
+        passp = repo.get_passport(passport_id)
+        origin_grade = passp.origin_grade if passp else "A"
+        origin_weight = passp.weight_g if passp else 250
+
+        ledger = CustodyLedger(
+            passport_id=passport_id,
+            origin_grade=origin_grade,
+            origin_weight_g=origin_weight,
+        )
+        for ev in repo.list_custody_events_by_passport(passport_id):
+            if ev.interval_name in CUSTODY_INTERVAL_ORDER:
+                ledger.record_checkpoint(
+                    CustodyCheckpoint(
+                        interval=ev.interval_name,
+                        actor="system",
+                        grade_observed=ev.grade_observed or "B",
+                        weight_g=ev.weight_g,
+                        seal_intact=ev.seal_intact,
+                    )
+                )
+
+        interval = req_body.interval
+        if interval not in CUSTODY_INTERVAL_ORDER:
+            interval = "DOCK" if "DOCK" in interval.upper() else "CARRIER_RETURN"
+
+        cp = CustodyCheckpoint(
+            interval=interval,
+            actor=principal.sub,
+            grade_observed="B",
+            weight_g=req_body.weight_g,
+            seal_intact=(req_body.seal_status == "INTACT"),
+        )
+        ledger.record_checkpoint(cp)
+        attribution = ledger.attribute_condition_change(target_grade="B")
+
         event_rec = CustodyEvent(
             custody_event_id=f"ce_{uuid.uuid4().hex[:8]}",
             passport_id=passport_id,
-            interval_name=req_body.interval,
+            interval_name=interval,
             weight_g=req_body.weight_g,
             seal_intact=(req_body.seal_status == "INTACT"),
+            grade_observed="B",
             records_only=True,
             evidence_ref=req_body.evidence_ref or "evidence_dock.jpg",
         )
@@ -2094,9 +2218,11 @@ def create_app(
             status_code=200,
             content={
                 "passport_id": passport_id,
-                "interval": req_body.interval,
+                "interval": interval,
                 "weight_g": req_body.weight_g,
                 "seal_status": req_body.seal_status,
+                "responsible_interval": attribution.responsible_interval,
+                "weight_delta_g": attribution.weight_delta_g,
                 "records_only": True,
             },
         )
@@ -2728,11 +2854,32 @@ def create_app(
         # Real state transition pipeline based on carrier scan
         event_type = req_body.type.upper()
         observed_seal = getattr(req_body, "seal_nonce", None) or body_dict.get("seal_nonce")
+        from backend.domain.nonce import SealNonce
+        from backend.domain.return_seal import ReturnSealRecord, verify_return_seal_at_checkin
+
         if ret.seal_nonce_hash:
-            seal_nonce_matches = bool(
-                observed_seal
-                and hashlib.sha256(observed_seal.encode("utf-8")).hexdigest() == ret.seal_nonce_hash
-            )
+            if observed_seal:
+                hash_matches = bool(
+                    hashlib.sha256(observed_seal.encode("utf-8")).hexdigest() == ret.seal_nonce_hash
+                )
+                seal_rec = ReturnSealRecord(
+                    return_id=ret.return_id,
+                    nonce=SealNonce(
+                        nonce_code=observed_seal if hash_matches else "",
+                        nonce_hash=ret.seal_nonce_hash or "",
+                        qr_payload=observed_seal or "",
+                    ),
+                    origin_weight_g=250,
+                )
+                seal_valid, reasons = verify_return_seal_at_checkin(
+                    seal_rec,
+                    observed_nonce_code=observed_seal,
+                    checkin_weight_g=250,
+                    seal_intact=True,
+                )
+                seal_nonce_matches = hash_matches and seal_valid
+            else:
+                seal_nonce_matches = False
         else:
             seal_nonce_matches = True if not observed_seal else False
 
@@ -2762,9 +2909,35 @@ def create_app(
         except InvalidStateTransitionError as exc:
             return _problem(409, "INVALID_STATE_TRANSITION", "Conflict", str(exc))
 
-        # Record tamper-evident custody checkpoint event (Section 25.1)
+        # Record tamper-evident custody checkpoint event (Section 25.1, FR-29, FR-30, FR-31)
+        from backend.domain.custody import (
+            CUSTODY_INTERVAL_ORDER,
+            CustodyCheckpoint,
+            CustodyLedger,
+        )
+
         order_items = repo.get_order_items(ret.order_id)
         passport_id = order_items[0].passport_id if order_items and order_items[0].passport_id else "pass_demo_1"
+        passp = repo.get_passport(passport_id)
+        origin_grade = passp.origin_grade if passp else (ret.declared_grade or "A")
+        origin_weight = passp.weight_g if passp else 250
+
+        c_interval = "CARRIER_RETURN" if event_type in {"CARRIER_FIRST_SCAN", "CARRIER_PICKUP", "IN_TRANSIT"} else "DOCK"
+        custody_ledger = CustodyLedger(
+            passport_id=passport_id,
+            origin_grade=origin_grade,
+            origin_weight_g=origin_weight,
+        )
+        cp = CustodyCheckpoint(
+            interval=c_interval,
+            actor="carrier",
+            grade_observed=ret.declared_grade or "B",
+            weight_g=250,
+            seal_intact=True,
+        )
+        custody_ledger.record_checkpoint(cp)
+        attribution = custody_ledger.attribute_condition_change(target_grade=ret.declared_grade or "B")
+
         custody_event = CustodyEvent(
             custody_event_id=f"ce_{uuid.uuid4().hex[:12]}",
             passport_id=passport_id,

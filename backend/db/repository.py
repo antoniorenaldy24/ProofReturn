@@ -614,6 +614,10 @@ class DatabaseRepository:
             stmt = select(OrderItem).where(OrderItem.order_id == order_id)
             return list(session.exec(stmt).all())
 
+    def get_order_item(self, order_item_id: str) -> OrderItem | None:
+        with self.get_session() as session:
+            return session.get(OrderItem, order_item_id)
+
     def resolve_order_line_price_minor(
         self,
         *,
