@@ -2,7 +2,7 @@
   "test_id": "ST-01",
   "round": "R4",
   "requirement": "AUD-02 HIGH",
-  "generated_at": "2026-11-08T07:45:43.148185+00:00",
+  "generated_at": "2026-11-08T08:14:46.257157+00:00",
   "mode": "dry-run",
   "invariants_tested": [
     "INV-01",
@@ -12,16 +12,16 @@
     "FR-75"
   ],
   "order_1_happy_path": {
-    "order_id": "ord_st01_1_59cafb",
+    "order_id": "ord_st01_1_6c3877",
     "paypal_order_id": "ORD-DRYRUN-1001",
     "capture_id": "CAP-DRYRUN-5001",
     "capture_status": "COMPLETED",
     "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5001",
-    "return_id": "ret_cd463d3cf8",
+    "return_id": "ret_98ee096baf",
     "confirmed_actions_count": 2,
     "actions": [
       {
-        "request_id": "0e0dd243-cf7e-5db8-ab89-1fc8862a5bf0",
+        "request_id": "af15ae33-9575-54cf-b333-e7940a60d838",
         "tranche": "R0",
         "amount_minor": 21249,
         "status": "CONFIRMED",
@@ -30,7 +30,7 @@
         "attempt_count": 1
       },
       {
-        "request_id": "adf2568e-d8fc-56c6-9320-493d3ffaa6ea",
+        "request_id": "c7021624-86fb-5ba1-a94d-9cf5f7e711e1",
         "tranche": "SETTLEMENT",
         "amount_minor": 14851,
         "status": "CONFIRMED",
@@ -48,7 +48,7 @@
         {
           "id": "REF-DRYRUN-9001",
           "capture_id": "CAP-DRYRUN-5001",
-          "request_id": "0e0dd243-cf7e-5db8-ab89-1fc8862a5bf0",
+          "request_id": "af15ae33-9575-54cf-b333-e7940a60d838",
           "status": "COMPLETED",
           "amount": {
             "value": "212.49",
@@ -63,7 +63,7 @@
         {
           "id": "REF-DRYRUN-9002",
           "capture_id": "CAP-DRYRUN-5001",
-          "request_id": "adf2568e-d8fc-56c6-9320-493d3ffaa6ea",
+          "request_id": "c7021624-86fb-5ba1-a94d-9cf5f7e711e1",
           "status": "COMPLETED",
           "amount": {
             "value": "148.51",
@@ -79,17 +79,17 @@
     }
   },
   "order_2_dispute_scenario": {
-    "order_id": "ord_st01_2_00fc7d",
+    "order_id": "ord_st01_2_e21869",
     "paypal_order_id": "ORD-DRYRUN-1002",
     "capture_id": "CAP-DRYRUN-5002",
     "capture_status": "COMPLETED",
     "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5002",
-    "return_id": "ret_729b7dcc4c",
+    "return_id": "ret_9289a2288e",
     "r0_confirmed_refund_id": "REF-DRYRUN-9003",
     "r0_confirmed_debug_id": "dbg-ref-REF-DRYRUN-9003",
     "dispute_webhook": {
-      "event_id": "WH-DISP-ST01-647bb760",
-      "dispute_id": "PP-DISP-89ecdc08",
+      "event_id": "WH-DISP-ST01-8b1c37d1",
+      "dispute_id": "PP-DISP-acdb8acc",
       "event_type": "CUSTOMER.DISPUTE.CREATED",
       "delivery_path": "signed_demo_webhook"
     },

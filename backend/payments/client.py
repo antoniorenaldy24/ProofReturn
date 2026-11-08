@@ -301,10 +301,32 @@ class PayPalSandboxClient:
             resp = client.get(url, headers=headers)
             resp.raise_for_status()
             data = resp.json()
+            refunds = data.get("refunds", [])
+            # PayPal captures endpoint does not embed refunds directly; query parent order via rel: "up" link if present
+            if not refunds:
+                up_link = next((lnk.get("href") for lnk in data.get("links", []) if lnk.get("rel") == "up"), None)
+                if up_link:
+                    try:
+                        ord_resp = client.get(up_link, headers=headers)
+                        if ord_resp.status_code == 200:
+                            ord_data = ord_resp.json()
+                            pu = ord_data.get("purchase_units", [])
+                            if pu:
+                                order_refunds = pu[0].get("payments", {}).get("refunds", [])
+                                if isinstance(order_refunds, list):
+                                    refunds = [
+                                        r for r in order_refunds
+                                        if any(
+                                            lnk.get("rel") == "up" and capture_id in str(lnk.get("href"))
+                                            for lnk in r.get("links", [])
+                                        ) or not r.get("links")
+                                    ]
+                    except Exception:
+                        pass
             return {
                 "id": data.get("id", capture_id),
                 "status": data.get("status", ""),
-                "refunds": data.get("refunds", []),
+                "refunds": refunds,
                 "links": data.get("links", []),
                 "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
             }
