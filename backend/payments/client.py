@@ -100,6 +100,7 @@ class PayPalSandboxClient:
             return {
                 "id": data.get("id"),
                 "status": data.get("status"),
+                "links": data.get("links", []),
                 "paypal_debug_id": resp.headers.get("paypal-debug-id", ""),
             }
 

@@ -2,6 +2,20 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.44] — 2026-11-08 (Session 44 / Round 4 Task T10 — ST-01 through the system in PayPal Sandbox)
+
+### ST-01 Live Sandbox System Execution Driver, Dispute Freeze & Headless Dry-Run (AUD-02 HIGH, ARC-19, FR-75)
+- **ST-01 System Run Driver (`scripts/st01_system_run.py`)**:
+  - Implemented end-to-end driver executing Order 1 (create order, await buyer approval, capture, return lifecycle through API, outbox dispatch to CONFIRMED, capture/refunds GET verification at PayPal) and Order 2 (dispute freeze scenario: create, capture, confirm R0, inject signed `CUSTOMER.DISPUTE.CREATED` webhook, verify order frozen, assert subsequent review rejected with 409, and verify zero further refunds at PayPal).
+  - Implemented `FakePayPalSandboxClient` supporting headless `--dry-run` execution in automated CI environments.
+  - Generates `docs/evidence/st01-R4.json` capturing execution timestamps, IDs, statuses, and debug headers without logging credentials or tokens.
+- **Superseded Evidence File (`docs/evidence/st01-system-run-R3-SUPERSEDED.txt`)**:
+  - Renamed legacy evidence file to `st01-system-run-R3-SUPERSEDED.txt` with header notice: `"Narrative only; superseded by st01-R4.json."`.
+- **Configuration Normalization (`backend/config.py`)**:
+  - Added `_normalize_paypal_base_url` validator auto-normalizing `https://sandbox.paypal.com` to `https://api-m.sandbox.paypal.com`.
+- **Automated CI Test Suite (`backend/tests/remediation/test_remediation_r4_t10_st01_sandbox_system_run.py`)**:
+  - Added automated tests verifying dry-run lifecycle execution, evidence JSON structure, secret cleanliness, and superseded file format (2 passed in 2.41s).
+
 ## [1.2.1-dev.43] — 2026-11-08 (Session 43 / Round 4 Task T9 — Invariant Test Suite Through the API, Isolated Test Database, and Audit Mapping)
 
 ### Invariant Test Suite, Session Database Isolation, and Audit Mapping (AUD-34 MEDIUM, AUD-36 MEDIUM, RV3-09 LOW, AUD-38 LOW)

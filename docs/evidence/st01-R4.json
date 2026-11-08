@@ -1,0 +1,101 @@
+{
+  "test_id": "ST-01",
+  "round": "R4",
+  "requirement": "AUD-02 HIGH",
+  "generated_at": "2026-11-08T07:45:43.148185+00:00",
+  "mode": "dry-run",
+  "invariants_tested": [
+    "INV-01",
+    "INV-02",
+    "INV-03",
+    "INV-07",
+    "FR-75"
+  ],
+  "order_1_happy_path": {
+    "order_id": "ord_st01_1_59cafb",
+    "paypal_order_id": "ORD-DRYRUN-1001",
+    "capture_id": "CAP-DRYRUN-5001",
+    "capture_status": "COMPLETED",
+    "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5001",
+    "return_id": "ret_cd463d3cf8",
+    "confirmed_actions_count": 2,
+    "actions": [
+      {
+        "request_id": "0e0dd243-cf7e-5db8-ab89-1fc8862a5bf0",
+        "tranche": "R0",
+        "amount_minor": 21249,
+        "status": "CONFIRMED",
+        "paypal_refund_id": "REF-DRYRUN-9001",
+        "paypal_debug_id": "dbg-ref-REF-DRYRUN-9001",
+        "attempt_count": 1
+      },
+      {
+        "request_id": "adf2568e-d8fc-56c6-9320-493d3ffaa6ea",
+        "tranche": "SETTLEMENT",
+        "amount_minor": 14851,
+        "status": "CONFIRMED",
+        "paypal_refund_id": "REF-DRYRUN-9002",
+        "paypal_debug_id": "dbg-ref-REF-DRYRUN-9002",
+        "attempt_count": 1
+      }
+    ],
+    "paypal_capture_verification": {
+      "capture_id": "CAP-DRYRUN-5001",
+      "status": "COMPLETED",
+      "paypal_debug_id": "dbg-cap-CAP-DRYRUN-5001",
+      "refunds_count": 2,
+      "refunds": [
+        {
+          "id": "REF-DRYRUN-9001",
+          "capture_id": "CAP-DRYRUN-5001",
+          "request_id": "0e0dd243-cf7e-5db8-ab89-1fc8862a5bf0",
+          "status": "COMPLETED",
+          "amount": {
+            "value": "212.49",
+            "currency_code": "USD"
+          },
+          "amount_minor": 21249,
+          "currency": "USD",
+          "invoice_id": null,
+          "custom_id": null,
+          "paypal_debug_id": "dbg-ref-REF-DRYRUN-9001"
+        },
+        {
+          "id": "REF-DRYRUN-9002",
+          "capture_id": "CAP-DRYRUN-5001",
+          "request_id": "adf2568e-d8fc-56c6-9320-493d3ffaa6ea",
+          "status": "COMPLETED",
+          "amount": {
+            "value": "148.51",
+            "currency_code": "USD"
+          },
+          "amount_minor": 14851,
+          "currency": "USD",
+          "invoice_id": null,
+          "custom_id": null,
+          "paypal_debug_id": "dbg-ref-REF-DRYRUN-9002"
+        }
+      ]
+    }
+  },
+  "order_2_dispute_scenario": {
+    "order_id": "ord_st01_2_00fc7d",
+    "paypal_order_id": "ORD-DRYRUN-1002",
+    "capture_id": "CAP-DRYRUN-5002",
+    "capture_status": "COMPLETED",
+    "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5002",
+    "return_id": "ret_729b7dcc4c",
+    "r0_confirmed_refund_id": "REF-DRYRUN-9003",
+    "r0_confirmed_debug_id": "dbg-ref-REF-DRYRUN-9003",
+    "dispute_webhook": {
+      "event_id": "WH-DISP-ST01-647bb760",
+      "dispute_id": "PP-DISP-89ecdc08",
+      "event_type": "CUSTOMER.DISPUTE.CREATED",
+      "delivery_path": "signed_demo_webhook"
+    },
+    "order_frozen_by_dispute": true,
+    "pre_dispute_refunds_count_at_paypal": 1,
+    "post_freeze_refunds_count_at_paypal": 1,
+    "no_further_refund_verified": true
+  }
+}

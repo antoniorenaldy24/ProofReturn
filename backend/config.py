@@ -96,6 +96,16 @@ class ProofReturnSettings(BaseSettings):
     media_retention_days: int = Field(default=90, ge=1, le=365)
     carrier_events_manual: bool = Field(default=False)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_paypal_base_url(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k in ("paypal_base_url", "PAYPAL_BASE_URL"):
+                val = data.get(k)
+                if isinstance(val, str) and val.strip().rstrip("/") in {"https://sandbox.paypal.com", "http://sandbox.paypal.com"}:
+                    data[k] = "https://api-m.sandbox.paypal.com"
+        return data
+
     @model_validator(mode="after")
     def _validate_security_guards(self) -> ProofReturnSettings:
         # TM-16: PayPal base URL must be a valid Sandbox host
