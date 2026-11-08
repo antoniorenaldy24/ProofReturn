@@ -1,4 +1,5 @@
 $ git log --oneline
+21ce7ee R4-T11: derive gate statuses from evidence and final evidence bundle (RV3-13, RV3-10)
 376a801 docs(st01): record live PayPal Sandbox run results and mark ST-01 VERIFIED
 e9eb318 fix(payments): resolve capture refunds via parent order up link in PayPalSandboxClient
 eaf84ef R4-T10: ST-01 PayPal Sandbox system execution driver and CI dry-run (AUD-02 HIGH, ARC-19, FR-75)
