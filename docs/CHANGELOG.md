@@ -2,6 +2,25 @@
 
 All notable changes to the ProofReturn codebase and system behavior are documented in this file in accordance with **Section 19.6 #2**.
 
+## [1.2.1-dev.45] — 2026-11-08 (Session 45 / Round 4 Task T11 — Derive Gate Statuses from Evidence; Final Evidence Bundle)
+
+### Derived Gate Statuses, Criteria Schema & Final Evidence Bundle (RV3-13 MEDIUM, RV3-10 LOW)
+- **Gate Criteria Schema Specification (`docs/gates/criteria.yaml`)**:
+  - Authored authoritative criteria specification listing requirements, invariants, ST IDs, and journeys from Section 27 for every gate G0 through G6.
+- **Automated Gate Derivation Script (`scripts/derive_gates.py`)**:
+  - Implemented derivation engine reading `criteria.yaml`, `docs/rtm.csv`, and `docs/sandbox-tests.md`.
+  - Enforced strict verification integrity:
+    * RTM rows verified only if status is `VERIFIED`, test evidence is recorded, and evidence files exist.
+    * ST rows verified only if marked `VERIFIED` and backed by real resource IDs in `docs/evidence/st01-R4.json`.
+  - Evaluates each gate and dynamically derives status: `PASSED` only if all criteria are VERIFIED; otherwise `IN PROGRESS` with the explicit list of missing criteria IDs.
+  - Corrected `docs/gates/final-acceptance.md`: G0 is `PASSED` (backed by verified ST-01), while G1..G6 accurately reflect `IN PROGRESS` with missing items (resolving `RV3-13`).
+  - Added `--check` mode failing with exit code 1 if `final-acceptance.md` differs from derived results; integrated into `.github/workflows/ci.yml`.
+- **Automated CI Test Suite (`backend/tests/remediation/test_remediation_r4_t11_derive_gates.py`)**:
+  - Authored 3 unit/integration tests verifying criteria structure, `--check` 0-diff clean run, and detection/rejection of manual edits to status column (3 passed in 0.47s).
+- **Final R4 Evidence Bundle (`docs/evidence/session-23-R4.md`)**:
+  - Compiled raw, objective command outputs: `git log --oneline`, full `uv run pytest -q` (279 passed), gate checks (`check_antipatterns.py` 0 findings, `check_refs.py` XR-01..10 verified), `/v1/ready` readiness probe, CI status, and `derive_gates.py --check` (resolving `RV3-10`).
+
+
 ## [1.2.1-dev.44] — 2026-11-08 (Session 44 / Round 4 Task T10 — ST-01 through the system in PayPal Sandbox)
 
 ### ST-01 Live Sandbox System Execution Driver, Dispute Freeze & Headless Dry-Run (AUD-02 HIGH, ARC-19, FR-75)

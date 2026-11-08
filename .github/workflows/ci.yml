@@ -36,6 +36,9 @@ jobs:
       - name: Verify RTM Traceability Synchronization (Section 20.1)
         run: uv run python scripts/sync_rtm.py
 
+      - name: Verify Derived Release Gates (RV3-13, Section 27)
+        run: uv run python scripts/derive_gates.py --check
+
       - name: Execute Pytest Suite (Unit, Property & Integration)
         run: uv run pytest -v -m "not live_model and not sandbox" --tb=short
 

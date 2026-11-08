@@ -28,6 +28,7 @@ dist-ssr/
 data/*.db
 data/*.db-*
 data/*.sqlite*
+data/backups/snap_drill_*.json
 scratch/
 
 # OS / IDE

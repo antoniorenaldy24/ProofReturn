@@ -1454,6 +1454,33 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 - `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.
 - `uv run pytest backend/tests/state_machine backend/tests/policy_engine backend/tests/golden -p no:cacheprovider`: **32 passed in 1.94s**.
 
+---
+
+## [2026-11-08] Session 45 — Round 4 Task T11: Derive Gate Statuses from Evidence and Final Evidence Bundle (RV3-13 MEDIUM, RV3-10 LOW)
+
+### 1. Key Accomplishments
+- **Gate Criteria Specification (`docs/gates/criteria.yaml`)**:
+  - Authored YAML schema specifying requirement IDs, invariant IDs, ST IDs, and journeys from Section 27 for each gate G0 through G6.
+- **Automated Gate Derivation Engine (`scripts/derive_gates.py`)**:
+  - Implemented derivation engine reading `criteria.yaml`, `docs/rtm.csv`, and `docs/sandbox-tests.md`.
+  - Enforced strict evidence rules: RTM rows verified only with tests and existing evidence files; ST rows verified only when backed by real resource IDs in `docs/evidence/st01-R4.json`.
+  - Evaluated gates dynamically: G0 is `PASSED` (backed by verified ST-01), while G1..G6 reflect `IN PROGRESS` with the explicit list of missing IDs, directly resolving audit finding `RV3-13`.
+  - Added `--check` mode for CI; added verification step into `.github/workflows/ci.yml`.
+- **Automated Unit & Tampering Regression Suite (`backend/tests/remediation/test_remediation_r4_t11_derive_gates.py`)**:
+  - Verified criteria YAML structure, `--check` 0-diff clean exit, and rejection of manual edits to the status column (3 passed in 0.47s).
+- **Final R4 Raw Evidence Bundle (`docs/evidence/session-23-R4.md`)**:
+  - Recorded raw command outputs for `git log --oneline`, full `uv run pytest -q` (279 passed in 33.76s), gate checks (`check_antipatterns.py` 0 findings, `check_refs.py` XR-01..10 verified), `/v1/ready` probe, and `derive_gates.py --check` (resolving `RV3-10`).
+
+### 2. Verification & Compliance
+- `uv run python scripts/derive_gates.py --check`: **0 diff, exited 0**.
+- `uv run python scripts/sync_rtm.py`: **137 rows synchronized, exited 0**.
+- `uv run python scripts/check_antipatterns.py`: **0 findings, exited 0**.
+- `uv run python scripts/check_refs.py`: **XR-01..XR-10 verified, exited 0**.
+- `uv run python scripts/scan_secrets.py`: **0 credentials/leaks detected across 288 files**.
+- `uv run pytest backend/tests/remediation/test_remediation_r4_t11_derive_gates.py`: **3 passed in 0.47s**.
+- Full test suite: **279 passed, 4 deselected, 1 warning in 33.76s**.
+
+
 
 
 
