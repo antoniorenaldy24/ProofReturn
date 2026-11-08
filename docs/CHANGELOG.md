@@ -7,8 +7,10 @@ All notable changes to the ProofReturn codebase and system behavior are document
 ### ST-01 Live Sandbox System Execution Driver, Dispute Freeze & Headless Dry-Run (AUD-02 HIGH, ARC-19, FR-75)
 - **ST-01 System Run Driver (`scripts/st01_system_run.py`)**:
   - Implemented end-to-end driver executing Order 1 (create order, await buyer approval, capture, return lifecycle through API, outbox dispatch to CONFIRMED, capture/refunds GET verification at PayPal) and Order 2 (dispute freeze scenario: create, capture, confirm R0, inject signed `CUSTOMER.DISPUTE.CREATED` webhook, verify order frozen, assert subsequent review rejected with 409, and verify zero further refunds at PayPal).
+  - Executed live against PayPal Sandbox API: Order 1 (`4KC31411G9005703B`), Capture 1 (`8EC40514UF446761D`), Refunds `9LE87880ES1929305` & `2HV051635G764092N`; Order 2 (`6A2834294A833180D`), Capture 2 (`2UP18766G92929542`), Refund `5MF0886551808522H`, frozen by dispute.
   - Implemented `FakePayPalSandboxClient` supporting headless `--dry-run` execution in automated CI environments.
-  - Generates `docs/evidence/st01-R4.json` capturing execution timestamps, IDs, statuses, and debug headers without logging credentials or tokens.
+  - Generated `docs/evidence/st01-R4.json` capturing execution timestamps, live PayPal IDs, statuses, and debug headers without logging credentials or tokens.
+  - ST-01 marked `VERIFIED` in `docs/sandbox-tests.md`.
 - **Superseded Evidence File (`docs/evidence/st01-system-run-R3-SUPERSEDED.txt`)**:
   - Renamed legacy evidence file to `st01-system-run-R3-SUPERSEDED.txt` with header notice: `"Narrative only; superseded by st01-R4.json."`.
 - **Configuration Normalization (`backend/config.py`)**:

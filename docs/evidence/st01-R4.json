@@ -2,8 +2,8 @@
   "test_id": "ST-01",
   "round": "R4",
   "requirement": "AUD-02 HIGH",
-  "generated_at": "2026-11-08T08:14:46.257157+00:00",
-  "mode": "dry-run",
+  "generated_at": "2026-11-08T08:18:37.595173+00:00",
+  "mode": "live",
   "invariants_tested": [
     "INV-01",
     "INV-02",
@@ -12,84 +12,152 @@
     "FR-75"
   ],
   "order_1_happy_path": {
-    "order_id": "ord_st01_1_6c3877",
-    "paypal_order_id": "ORD-DRYRUN-1001",
-    "capture_id": "CAP-DRYRUN-5001",
+    "order_id": "ord_st01_1_74e92f",
+    "paypal_order_id": "4KC31411G9005703B",
+    "capture_id": "8EC40514UF446761D",
     "capture_status": "COMPLETED",
-    "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5001",
-    "return_id": "ret_98ee096baf",
+    "capture_paypal_debug_id": "f170736ee1aea",
+    "return_id": "ret_9add55e996",
     "confirmed_actions_count": 2,
     "actions": [
       {
-        "request_id": "af15ae33-9575-54cf-b333-e7940a60d838",
+        "request_id": "097ebaa3-14da-526b-af11-03b5a8a72b92",
         "tranche": "R0",
         "amount_minor": 21249,
         "status": "CONFIRMED",
-        "paypal_refund_id": "REF-DRYRUN-9001",
-        "paypal_debug_id": "dbg-ref-REF-DRYRUN-9001",
+        "paypal_refund_id": "9LE87880ES1929305",
+        "paypal_debug_id": "f61237771e11a",
         "attempt_count": 1
       },
       {
-        "request_id": "c7021624-86fb-5ba1-a94d-9cf5f7e711e1",
+        "request_id": "bcd10254-6ec3-57c3-8372-0023d4e52d38",
         "tranche": "SETTLEMENT",
         "amount_minor": 14851,
         "status": "CONFIRMED",
-        "paypal_refund_id": "REF-DRYRUN-9002",
-        "paypal_debug_id": "dbg-ref-REF-DRYRUN-9002",
+        "paypal_refund_id": "2HV051635G764092N",
+        "paypal_debug_id": "f1676685aafab",
         "attempt_count": 1
       }
     ],
     "paypal_capture_verification": {
-      "capture_id": "CAP-DRYRUN-5001",
-      "status": "COMPLETED",
-      "paypal_debug_id": "dbg-cap-CAP-DRYRUN-5001",
+      "capture_id": "8EC40514UF446761D",
+      "status": "PARTIALLY_REFUNDED",
+      "paypal_debug_id": "f330595cd91fa",
       "refunds_count": 2,
       "refunds": [
         {
-          "id": "REF-DRYRUN-9001",
-          "capture_id": "CAP-DRYRUN-5001",
-          "request_id": "af15ae33-9575-54cf-b333-e7940a60d838",
-          "status": "COMPLETED",
+          "id": "2HV051635G764092N",
           "amount": {
-            "value": "212.49",
-            "currency_code": "USD"
+            "currency_code": "USD",
+            "value": "148.51"
           },
-          "amount_minor": 21249,
-          "currency": "USD",
-          "invoice_id": null,
-          "custom_id": null,
-          "paypal_debug_id": "dbg-ref-REF-DRYRUN-9001"
+          "seller_payable_breakdown": {
+            "gross_amount": {
+              "currency_code": "USD",
+              "value": "148.51"
+            },
+            "paypal_fee": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "platform_fees": [
+              {
+                "amount": {
+                  "currency_code": "USD",
+                  "value": "0.00"
+                }
+              }
+            ],
+            "net_amount": {
+              "currency_code": "USD",
+              "value": "148.51"
+            },
+            "total_refunded_amount": {
+              "currency_code": "USD",
+              "value": "361.00"
+            }
+          },
+          "custom_id": "ord_st01_1_74e92f",
+          "status": "COMPLETED",
+          "links": [
+            {
+              "href": "https://api.sandbox.paypal.com/v2/payments/refunds/2HV051635G764092N",
+              "rel": "self",
+              "method": "GET"
+            },
+            {
+              "href": "https://api.sandbox.paypal.com/v2/payments/captures/8EC40514UF446761D",
+              "rel": "up",
+              "method": "GET"
+            }
+          ],
+          "create_time": "2026-11-08T00:24:52-08:00",
+          "update_time": "2026-11-08T00:24:52-08:00"
         },
         {
-          "id": "REF-DRYRUN-9002",
-          "capture_id": "CAP-DRYRUN-5001",
-          "request_id": "c7021624-86fb-5ba1-a94d-9cf5f7e711e1",
-          "status": "COMPLETED",
+          "id": "9LE87880ES1929305",
           "amount": {
-            "value": "148.51",
-            "currency_code": "USD"
+            "currency_code": "USD",
+            "value": "212.49"
           },
-          "amount_minor": 14851,
-          "currency": "USD",
-          "invoice_id": null,
-          "custom_id": null,
-          "paypal_debug_id": "dbg-ref-REF-DRYRUN-9002"
+          "seller_payable_breakdown": {
+            "gross_amount": {
+              "currency_code": "USD",
+              "value": "212.49"
+            },
+            "paypal_fee": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "platform_fees": [
+              {
+                "amount": {
+                  "currency_code": "USD",
+                  "value": "0.00"
+                }
+              }
+            ],
+            "net_amount": {
+              "currency_code": "USD",
+              "value": "212.49"
+            },
+            "total_refunded_amount": {
+              "currency_code": "USD",
+              "value": "361.00"
+            }
+          },
+          "custom_id": "ord_st01_1_74e92f",
+          "status": "COMPLETED",
+          "links": [
+            {
+              "href": "https://api.sandbox.paypal.com/v2/payments/refunds/9LE87880ES1929305",
+              "rel": "self",
+              "method": "GET"
+            },
+            {
+              "href": "https://api.sandbox.paypal.com/v2/payments/captures/8EC40514UF446761D",
+              "rel": "up",
+              "method": "GET"
+            }
+          ],
+          "create_time": "2026-11-08T00:24:49-08:00",
+          "update_time": "2026-11-08T00:24:49-08:00"
         }
       ]
     }
   },
   "order_2_dispute_scenario": {
-    "order_id": "ord_st01_2_e21869",
-    "paypal_order_id": "ORD-DRYRUN-1002",
-    "capture_id": "CAP-DRYRUN-5002",
+    "order_id": "ord_st01_2_727ee8",
+    "paypal_order_id": "6A2834294A833180D",
+    "capture_id": "2UP18766G92929542",
     "capture_status": "COMPLETED",
-    "capture_paypal_debug_id": "dbg-cap-CAP-DRYRUN-5002",
-    "return_id": "ret_9289a2288e",
-    "r0_confirmed_refund_id": "REF-DRYRUN-9003",
-    "r0_confirmed_debug_id": "dbg-ref-REF-DRYRUN-9003",
+    "capture_paypal_debug_id": "f412732df3e2e",
+    "return_id": "ret_964b8d2dec",
+    "r0_confirmed_refund_id": "5MF0886551808522H",
+    "r0_confirmed_debug_id": "f8207332434ee",
     "dispute_webhook": {
-      "event_id": "WH-DISP-ST01-8b1c37d1",
-      "dispute_id": "PP-DISP-acdb8acc",
+      "event_id": "WH-DISP-ST01-6deaf00f",
+      "dispute_id": "PP-DISP-e355c753",
       "event_type": "CUSTOMER.DISPUTE.CREATED",
       "delivery_path": "signed_demo_webhook"
     },

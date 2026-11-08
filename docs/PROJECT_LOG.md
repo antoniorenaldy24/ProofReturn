@@ -1444,6 +1444,11 @@ Following the Independent Technical Audit (`Laporan Audit Teknis Independen — 
 
 ### 2. Verification & Compliance
 - `uv run python scripts/st01_system_run.py --dry-run`: **Exited 0, generated valid `docs/evidence/st01-R4.json`**.
+- `uv run python scripts/st01_system_run.py --live`: **Exited 0 with live funded PayPal Sandbox run**:
+  - Order 1 (`4KC31411G9005703B`), Capture 1 (`8EC40514UF446761D`), Refunds `9LE87880ES1929305` ($212.49) & `2HV051635G764092N` ($148.51).
+  - Order 2 (`6A2834294A833180D`), Capture 2 (`2UP18766G92929542`), R0 refund `5MF0886551808522H` ($212.49), frozen by dispute (`CUSTOMER.DISPUTE.CREATED`), zero subsequent refunds created.
+  - Successfully serialized live verification evidence to [`docs/evidence/st01-R4.json`](file:///c:/Users/renal/Downloads/ProofReturn/docs/evidence/st01-R4.json).
+  - ST-01 marked `VERIFIED` in [`docs/sandbox-tests.md`](file:///c:/Users/renal/Downloads/ProofReturn/docs/sandbox-tests.md).
 - `uv run pytest backend/tests/remediation/test_remediation_r4_t10_st01_sandbox_system_run.py -v`: **2 passed in 2.41s**.
 - `uv run python scripts/check_antipatterns.py`: **0 findings across repository (`OK: no audited anti-patterns found`, exit code 0)**.
 - `uv run python scripts/check_refs.py`: **`check-refs PASSED (XR-01..XR-10 verified)`**.

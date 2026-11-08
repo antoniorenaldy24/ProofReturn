@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger("proofreturn.payments.client")
 
 ALLOWED_SANDBOX_BASE_URLS: set[str] = {
     "https://api-m.sandbox.paypal.com",
@@ -321,8 +324,8 @@ class PayPalSandboxClient:
                                             for lnk in r.get("links", [])
                                         ) or not r.get("links")
                                     ]
-                    except Exception:
-                        pass
+                    except (httpx.HTTPError, KeyError, ValueError) as exc:
+                        logger.debug("Failed to resolve refunds via up link: %s", exc)
             return {
                 "id": data.get("id", capture_id),
                 "status": data.get("status", ""),
