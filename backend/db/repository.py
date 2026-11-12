@@ -580,7 +580,19 @@ class DatabaseRepository:
                 session.add(ShopperAccount(account_id="shopper_1", identity_group_id="grp_01", trust_tier="TRUSTED"))
             pver = f"pol_{merchant_id}"
             if session.get(Policy, pver) is None:
-                session.add(Policy(policy_version=pver, merchant_id=merchant_id, jurisdiction="US_CA"))
+                session.add(
+                    Policy(
+                        policy_version=pver,
+                        merchant_id=merchant_id,
+                        jurisdiction="US_CA",
+                        return_window_days=30,
+                        config_json={
+                            "curve": {"A": 1.0, "B": 0.95, "C": 0.80, "D": 0.50},
+                            "fee_f_minor": 1500,
+                            "c_ship_minor": 800,
+                        },
+                    )
+                )
             session.flush()
             order = Order(
                 order_id=order_id,
