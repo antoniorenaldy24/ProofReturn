@@ -125,12 +125,13 @@ export function DemoNavbar() {
         </div>
 
         {/* Live Active Order Status Pill & Reset */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-line bg-panel px-2.5 py-1 font-tech text-[10px]">
+        <div className="flex items-center gap-2 sm:gap-3" suppressHydrationWarning>
+          <div className="flex items-center gap-2 rounded-full border border-line bg-panel px-2.5 py-1 font-tech text-[10px]" suppressHydrationWarning>
             <span className="text-faint hidden sm:inline">DEMO CONTEXT:</span>
-            <span className="font-semibold text-ink">{state.order.id}</span>
-            <span className="text-dim">(${(state.order.priceMinor / 100).toFixed(2)})</span>
+            <span className="font-semibold text-ink" suppressHydrationWarning>{state.order.id}</span>
+            <span className="text-dim" suppressHydrationWarning>(${(state.order.priceMinor / 100).toFixed(2)})</span>
             <span
+              suppressHydrationWarning
               className={cn(
                 "rounded border px-1.5 py-0.2 font-semibold uppercase text-[8px] tracking-widest",
                 badge.color

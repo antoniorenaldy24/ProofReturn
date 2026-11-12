@@ -135,28 +135,42 @@ interface DemoContextValue {
 const DemoContext = createContext<DemoContextValue | undefined>(undefined);
 
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<DemoState>(() => {
-    if (typeof window !== "undefined") {
+  const [state, setState] = useState<DemoState>(DEFAULT_DEMO_STATE);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Rehydrate state from localStorage ONLY on client mount (prevents SSR hydration error)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setState(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Failed to restore demo state from storage", e);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Persist state updates to localStorage only after initial client mount
+  useEffect(() => {
+    if (isLoaded && typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (e) {
-        console.error("Failed to restore demo state from storage", e);
+        console.error("Failed to save demo state to storage", e);
       }
     }
-    return DEFAULT_DEMO_STATE;
-  });
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-  }, [state]);
+  }, [state, isLoaded]);
 
   const resetDemo = () => {
     setState(DEFAULT_DEMO_STATE);
     if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        console.error("Failed to clear demo storage", e);
+      }
     }
   };
 
