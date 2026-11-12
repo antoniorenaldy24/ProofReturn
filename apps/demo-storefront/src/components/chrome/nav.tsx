@@ -27,8 +27,8 @@ function LabClock() {
 
 export function Nav() {
   const qty = useLedger((s) => s.qty);
-  const { progress } = useScroll();
-  const scaleX = useSpring(progress, { stiffness: 140, damping: 28, mass: 0.4 });
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, { stiffness: 140, damping: 28, mass: 0.4 });
   const [active, setActive] = useState<string>("specimen");
 
   useEffect(() => {

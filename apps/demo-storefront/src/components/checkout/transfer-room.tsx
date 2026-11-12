@@ -108,7 +108,7 @@ function TransferRun({
             {CHECKOUT.paypal.steps.map((s, i) => {
               const state = step > i ? "done" : step === i ? "active" : "waiting";
               return (
-                <li key={s} className="flex items-center gap-3.5">
+                <li key={s.line} className="flex items-center gap-3.5">
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -126,7 +126,7 @@ function TransferRun({
                       state === "waiting" ? "text-ink/40" : "text-ink",
                     )}
                   >
-                    {s}
+                    {s.line}
                   </span>
                   {state === "active" && (
                     <motion.span

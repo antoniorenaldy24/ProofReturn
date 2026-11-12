@@ -312,8 +312,16 @@ def test_outbox_run_endpoint_requires_merchant_admin_of_same_merchant(
     r_rev = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {tok_reviewer}"})
     assert r_rev.status_code == 403
 
-    # 4. Merchant Admin of merch_a -> 200
-    r_admin_a = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {tok_admin_a}"})
+    # 4. Merchant Admin of merch_a without idempotency key -> 400 IDEMPOTENCY_KEY_REQUIRED (API-06)
+    r_no_idem = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {tok_admin_a}"})
+    assert r_no_idem.status_code == 400
+    assert r_no_idem.json()["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+
+    # 5. Merchant Admin of merch_a with Idempotency-Key -> 200
+    r_admin_a = client.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {tok_admin_a}", "Idempotency-Key": "idem_ops_outbox_01"},
+    )
     assert r_admin_a.status_code == 200
     data_a = r_admin_a.json()
     assert "processed" in data_a

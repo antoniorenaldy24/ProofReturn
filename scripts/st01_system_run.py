@@ -414,7 +414,10 @@ def run_st01_flow(
     print("Running outbox executor to dispatch planned refunds to PayPal...")
     total_processed_ord1 = 0
     for iteration in range(1, 10):
-        r_outbox = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {staff_admin_tok}"})
+        r_outbox = client.post(
+            "/v1/ops/outbox/run",
+            headers={"Authorization": f"Bearer {staff_admin_tok}", "Idempotency-Key": f"ik-st01-outbox-ord1-{iteration}"},
+        )
         assert r_outbox.status_code == 200, f"Outbox run failed: {r_outbox.text}"
         outbox_res = r_outbox.json()
         claimed = outbox_res.get("claimed", 0)
@@ -585,7 +588,10 @@ def run_st01_flow(
     assert r_evid_2.status_code == 200
 
     # Dispatch outbox to confirm R0 refund ONLY
-    r_outbox_r0 = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {staff_admin_tok}"})
+    r_outbox_r0 = client.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {staff_admin_tok}", "Idempotency-Key": f"ik-st01-outbox-r0-{order_id_2}"},
+    )
     assert r_outbox_r0.status_code == 200
 
     actions_ord2 = repo.list_refund_actions_by_return(return_id_2)
@@ -652,7 +658,10 @@ def run_st01_flow(
         print(f"  -> Properly rejected with ORDER_FROZEN: {r_rev_2.json().get('code')}")
 
     # Run outbox again
-    r_outbox_post = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {staff_admin_tok}"})
+    r_outbox_post = client.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {staff_admin_tok}", "Idempotency-Key": f"ik-st01-outbox-post-{order_id_2}"},
+    )
     assert r_outbox_post.status_code == 200
 
     # 1.f Assert that NO FURTHER refund exists at PayPal

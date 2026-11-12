@@ -628,21 +628,32 @@ def create_app(
 
     @app.post("/v1/ops/outbox/run")
     async def run_outbox_executor(
+        request: Request,
         authorization: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         limit: int = Query(default=10, ge=1, le=100),
     ) -> JSONResponse:
-        """Manually trigger the transactional refund outbox executor (MERCHANT_ADMIN only; AUD-02, ARC-19)."""
+        """Manually trigger the transactional refund outbox executor (MERCHANT_ADMIN only; AUD-02, ARC-19, API-06)."""
         principal, err = _resolve_principal(authorization, required=True)
         if err:
             return err
         if not principal or not principal.is_staff or principal.role != "MERCHANT_ADMIN":
             return _problem(403, ErrorCode.ROLE_FORBIDDEN, "Forbidden", "Only MERCHANT_ADMIN can trigger outbox executor.")
+
+        cache_key, body_hash, idem_resp = await _require_idempotency(
+            request, "/v1/ops/outbox/run", principal, idempotency_key
+        )
+        if idem_resp:
+            return idem_resp
+
         effective_now = datetime.now(UTC) + timedelta(seconds=clock_offset_seconds)
         result = outbox_executor.run_once(
             limit=limit,
             merchant_id=principal.merchant_id,
             now=effective_now,
         )
+        if cache_key:
+            idempotency_cache[cache_key] = (body_hash or "", 200, result)
         return JSONResponse(status_code=200, content=result)
 
     # =========================================================================

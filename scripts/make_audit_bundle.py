@@ -30,8 +30,7 @@ def run_cmd(cmd: list[str], cwd: Path = REPO_ROOT, capture: bool = True) -> str:
 
 
 def ensure_dirs() -> None:
-    if OUT_DIR.exists():
-        shutil.rmtree(OUT_DIR)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     WHEELHOUSE_DIR.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -178,10 +177,10 @@ This document accompanies the offline audit bundle prepared for the air-gapped U
 
 ## 1. Environment & Offline Installation Instructions
 
-To unpack and install this bundle in an offline sandbox:
+To unpack and install this bundle in an offline air-gapped sandbox:
 
 ```bash
-# 1. Unpack repo from bundle
+# 1. Unpack repository from bundle
 git clone audit-bundle/repo.bundle proofreturn-audit
 cd proofreturn-audit
 
@@ -191,22 +190,59 @@ source .venv/bin/activate
 pip install --no-index --find-links=../audit-bundle/wheelhouse -r ../audit-bundle/requirements-audit.txt
 pip install --no-index --find-links=../audit-bundle/wheelhouse coverage pytest-cov
 
-# 3. Seed runtime SQLite database
-python scripts/seed.py
+# 3. Setup Frontend node_modules without internet (Linux x86_64)
+tar -xJf ../audit-bundle/node_modules-linux.tar.xz
 
-# 4. Verify test suites
+# 4. Generate Valid Testing Secrets (.env)
+# NOTE (RV-01): .env.example contains explicit placeholders (e.g. replace_with_...).
+# Per ProofReturn RV-01, Pydantic settings validator rejects unreplaced placeholders
+# to prevent insecure defaults. Generate valid 32-byte test keys with:
+python3 -c "import secrets; print(f'DEMO_BOOTSTRAP_KEY={secrets.token_hex(32)}\\nDEMO_WEBHOOK_SECRET={secrets.token_hex(32)}\\nAUTH_SIGNING_KEY={secrets.token_hex(32)}\\nPLATFORM_SIGNING_SEED_HEX={secrets.token_hex(32)}\\nPACKER_SIGNING_SEED_HEX={secrets.token_hex(32)}\\nSERIAL_HASH_SALT={secrets.token_hex(32)}\\nPAYER_HASH_SALT={secrets.token_hex(32)}\\nDATABASE_URL=sqlite:///data/proofreturn.db\\nDEMO_MODE=true\\nENVIRONMENT=local\\nMODE=judge\\nRUN_MIGRATIONS_ON_START=true') " > .env
+
+# 5. Database Setup: Migrations & Catalog Seed
+# NOTE: Alembic creates database tables; seed.py inserts initial products and policies.
+mkdir -p data
+uv run alembic upgrade head
+python3 scripts/seed.py
+
+# 6. Verify Test Suites
 pytest -q -rA
+npm test
+(cd apps/demo-storefront && npx next build)
 ```
 
 ---
 
-## 2. Intentional Simulation Boundaries & Design Decisions
+## 2. Remediation & Hardening in this Update (R4 Auditor Findings)
+
+1. **Linux Ext4 Case-Sensitivity Fix**:
+   - Corrected test file path in `backend/tests/remediation/test_remediation_tahap5_clean_architecture_and_ops.py` to `docs/ADR/ADR-028-google-gemini-multimodal-grader.md`, matching exact disk casing.
+   - All 279 backend pytest tests now pass natively on Linux ext4.
+
+2. **Frontend Next.js Proxy Security Hardening**:
+   - `apps/demo-storefront/src/app/api/backend/[...path]/route.ts`:
+     - **Blocked Internal Routes**: Requests targeting `ops/*`, `metrics`, and `auth/staff-token` are blocked immediately with `403 Forbidden`. Loopback metrics and operational endpoints are strictly isolated from the public frontend proxy.
+     - **Removed Global Bootstrap Key Injection**: The proxy no longer injects `X-Demo-Bootstrap-Key` globally into arbitrary requests. It is scoped strictly to demo shopper magic link issuance (`auth/shopper-magic-link`) or when explicitly supplied by the caller.
+
+3. **Outbox Executor Idempotency Enforcement (API-06, ARC-19)**:
+   - `POST /v1/ops/outbox/run` now requires the `Idempotency-Key` header, returning `400 IDEMPOTENCY_KEY_REQUIRED` when missing and caching executions in the replay cache.
+
+4. **Strict Frontend TypeScript Build**:
+   - Removed `typescript: { ignoreBuildErrors: true }` from `apps/demo-storefront/next.config.ts`.
+   - Fixed all TypeScript typing mismatches across components (`checkout-bay.tsx`, `transfer-room.tsx`, `ornaments.tsx`, `nav.tsx`, `odometer.tsx`).
+   - Removed untracked duplicate route `/storefront` which was previously masked by `.gitignore`.
+   - `next build` now executes with strict zero-error TypeScript validation.
+   - Pre-packaged native Linux dependencies in `node_modules-linux.tar.xz` (built with Node 22 on Linux x86_64) for offline execution.
+
+---
+
+## 3. Intentional Simulation Boundaries & Design Decisions
 
 Per Section 8.1, Section 12, and Section 35 of ProofReturn SSOT v1.21:
 
 1. **PayPal Sandbox & Checkout (T6 Option B / Task 10)**:
    - Live PayPal calls require outward network connectivity to `api-m.sandbox.paypal.com` (`TM-16`).
-   - In offline mode or local demo, `backend/payments/paypal_client.py` simulates PayPal order creation and partial captures using local cryptographic fixtures. No external calls occur offline.
+   - In offline mode or local demo, `backend/payments/service.py` (`PayPalSandboxClient` and `RefundOutboxExecutor`) simulates PayPal order creation and partial captures using local cryptographic fixtures. No external calls occur offline.
    - The Storefront transfer room (`apps/demo-storefront/src/components/checkout/transfer-room.tsx`) provides an interactive simulation of the PayPal Sandbox flow.
 
 2. **Multimodal AI & Gemini Vision Model (FR-15..20, FR-80, FR-99)**:
@@ -222,11 +258,11 @@ Per Section 8.1, Section 12, and Section 35 of ProofReturn SSOT v1.21:
 4. **Secrets & Configuration (RV-01, TM-24, Section 35.1)**:
    - Secret keys are typed as `pydantic.SecretStr` in `backend/config.py` with automatic string masking.
    - `.env` is never committed; `reports/env-history.txt` verifies 0 occurrences of `.env` in the git history.
-   - A demo bootstrap key (`DEMO_BOOTSTRAP_KEY`) is provided in `.env.example` for testing local JWT minting via `/v1/auth/shopper-magic-link`.
+   - Default placeholder values in `.env.example` fail closed by design; random secrets can be generated using the command in Section 1.
 
 ---
 
-## 3. Test & Verification Summary
+## 4. Test & Verification Summary
 
 - **Backend Pytest**: 279 passing tests across unit, golden, and remediation suites.
 - **Frontend Controller Test**: 6/6 tests passing (`packages/ui/tests/frontend.test.ts`).

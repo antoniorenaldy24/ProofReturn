@@ -55,3 +55,5 @@ export function RollingNumber({
     </span>
   );
 }
+
+export { RollingNumber as Odometer };

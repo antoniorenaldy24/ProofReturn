@@ -177,7 +177,7 @@ def test_doc05_doc06_adr_and_model_identifier_harmonization() -> None:
     settings = get_settings()
     assert settings.gemini_model == "gemini-3.6-flash"
 
-    adr_path = Path("docs/adr/ADR-028-google-gemini-multimodal-grader.md")
+    adr_path = Path("docs/ADR/ADR-028-google-gemini-multimodal-grader.md")
     assert adr_path.exists()
     content = adr_path.read_text(encoding="utf-8")
     assert "gemini-3.6-flash" in content

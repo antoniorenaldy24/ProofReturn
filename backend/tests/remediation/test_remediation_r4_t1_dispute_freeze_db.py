@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import pathlib
+import secrets
 from typing import Any
 
 import pytest
@@ -107,7 +108,7 @@ def _complete_r0_and_confirm(
 
     r_outbox = client.post(
         "/v1/ops/outbox/run",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin_token}", "Idempotency-Key": f"idem_r4_t1_{secrets.token_hex(4)}"},
     )
     assert r_outbox.status_code == 200
     assert r_outbox.json()["confirmed"] == 1
@@ -268,7 +269,7 @@ def test_dispute_webhook_while_r1_planned_marks_blocked_by_dispute_and_releases_
     admin_token = mint_staff_token(merchant_id="merch_a", role="MERCHANT_ADMIN", sub="admin_01")
     r_outbox = client.post(
         "/v1/ops/outbox/run",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin_token}", "Idempotency-Key": f"idem_r4_t1_{secrets.token_hex(4)}"},
     )
     assert r_outbox.status_code == 200
 
@@ -359,7 +360,16 @@ def test_capture_reversed_webhook_blocks_planning_and_outbox_execution(
     assert client_2.post("/v1/webhooks/paypal", content=raw_wh2, headers=headers_wh2).status_code == 200
 
     admin_token = mint_staff_token(merchant_id="merch_a", role="MERCHANT_ADMIN", sub="admin_01")
-    assert client_2.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_token}"}).status_code == 200
+    assert (
+        client_2.post(
+            "/v1/ops/outbox/run",
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "Idempotency-Key": f"idem_r4_t1_{secrets.token_hex(4)}",
+            },
+        ).status_code
+        == 200
+    )
 
     assert len(fake_pp_2.calls) == 0
     r1_acts = [a for a in repo_2.list_refund_actions_by_order("ord_demo_1") if a.tranche == "SETTLEMENT"]

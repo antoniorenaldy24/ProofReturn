@@ -161,7 +161,7 @@ export function DemoNavbar() {
           {PERSONAS.map((p) => {
             const isActive =
               p.href === "/"
-                ? pathname === "/" || pathname === "/storefront"
+                ? pathname === "/"
                 : pathname?.startsWith(p.href);
 
             const Icon = p.icon;

@@ -200,7 +200,7 @@ function PayPalModal({
         if (cancelled) return;
         setLines((l) => {
           const next = [...l];
-          next[next.length - 1] = { ...step, done: true };
+          next[next.length - 1] = { text: step.line, detail: step.detail, done: true };
           return next;
         });
       }

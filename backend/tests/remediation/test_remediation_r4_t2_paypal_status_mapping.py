@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import pathlib
+import secrets
 from typing import Any
 
 import pytest
@@ -148,7 +149,10 @@ def test_pending_refund_not_confirmed_then_completed_via_get_or_webhook_confirms
     }
 
     # Outbox Run #1: POST refund returns PENDING -> stays SUBMITTED with status_detail, NOT confirmed
-    r_out1 = client_a.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"})
+    r_out1 = client_a.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+    )
     assert r_out1.status_code == 200
     assert len(fake_pp_a.refund_calls) == 1
     assert len(fake_pp_a.get_refund_calls) == 0
@@ -170,7 +174,10 @@ def test_pending_refund_not_confirmed_then_completed_via_get_or_webhook_confirms
         "status": "COMPLETED",
         "paypal_debug_id": "dbg_get_comp_01",
     }
-    r_out2 = client_a.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"})
+    r_out2 = client_a.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+    )
     assert r_out2.status_code == 200
     assert len(fake_pp_a.refund_calls) == 1  # No second POST refund
     assert fake_pp_a.get_refund_calls == ["PP-REF-PEND-01"]
@@ -211,7 +218,13 @@ def test_pending_refund_not_confirmed_then_completed_via_get_or_webhook_confirms
         "status": "PENDING",
         "status_detail": "PENDING_REVIEW",
     }
-    assert client_b.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"}).status_code == 200
+    assert (
+        client_b.post(
+            "/v1/ops/outbox/run",
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+        ).status_code
+        == 200
+    )
     assert repo_b.get_order("ord_demo_1").confirmed_refunded_minor == 0
 
     raw_wh_b, hdr_wh_b = _sign_webhook(
@@ -231,7 +244,13 @@ def test_pending_refund_not_confirmed_then_completed_via_get_or_webhook_confirms
     assert repo_b.list_refund_actions_by_order("ord_demo_1")[0].status == "CONFIRMED"
 
     # Subsequent outbox run does not call GET or POST or double-confirm
-    assert client_b.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"}).status_code == 200
+    assert (
+        client_b.post(
+            "/v1/ops/outbox/run",
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+        ).status_code
+        == 200
+    )
     assert len(fake_pp_b.get_refund_calls) == 0
     assert repo_b.get_order("ord_demo_1").confirmed_refunded_minor == r0_minor_b
 
@@ -261,7 +280,10 @@ def test_failed_and_cancelled_release_pending_and_never_sent_again(
     }
 
     # Outbox Run #1 -> marks FAILED_PERMANENT and releases pending_refunded_minor
-    r_out1 = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"})
+    r_out1 = client.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+    )
     assert r_out1.status_code == 200
     assert len(fake_pp.refund_calls) == 1
 
@@ -275,7 +297,10 @@ def test_failed_and_cancelled_release_pending_and_never_sent_again(
     assert ord_row.confirmed_refunded_minor == 0
 
     # Outbox Run #2 -> never sent again
-    r_out2 = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"})
+    r_out2 = client.post(
+        "/v1/ops/outbox/run",
+        headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+    )
     assert r_out2.status_code == 200
     assert len(fake_pp.refund_calls) == 1
     assert len(fake_pp.get_refund_calls) == 0
@@ -302,7 +327,10 @@ def test_2xx_without_id_marks_unknown_and_confirmed_balance_unchanged(
     }
 
     with caplog.at_level(logging.WARNING, logger="proofreturn.payments.outbox"):
-        r_out = client.post("/v1/ops/outbox/run", headers={"Authorization": f"Bearer {admin_tok}"})
+        r_out = client.post(
+            "/v1/ops/outbox/run",
+            headers={"Authorization": f"Bearer {admin_tok}", "Idempotency-Key": f"idem_r4_t2_{secrets.token_hex(4)}"},
+        )
     assert r_out.status_code == 200
     assert "REFUND_ID_MISSING" in caplog.text
 

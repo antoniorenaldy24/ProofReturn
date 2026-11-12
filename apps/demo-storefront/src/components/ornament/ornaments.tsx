@@ -207,9 +207,9 @@ export function Stamp({
    Corner ornament for plate frames
 ———————————————————————————————————————————————— */
 
-export function CornerMark({ size = 26 }: { size?: number }) {
+export function CornerMark({ size = 26, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 26 26" aria-hidden="true" focusable="false">
+    <svg width={size} height={size} viewBox="0 0 26 26" aria-hidden="true" focusable="false" className={className}>
       <g stroke="var(--ink)" strokeWidth="0.8" fill="none">
         <path d="M 1 1 H 8 M 1 1 V 8" />
         <circle cx="4" cy="4" r="1.6" fill="var(--ink)" stroke="none" />
