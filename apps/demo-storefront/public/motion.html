@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ProofReturn — 60s Framer Motion Tour (Rich Informative Bento)</title>
+  <title>ProofReturn — 60s Framer Motion Tour with Synchronized English Teleprompter</title>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -84,7 +84,7 @@
     /* Top Navigation HUD */
     .nav-pill {
       position: absolute;
-      top: 20px;
+      top: 18px;
       left: 28px;
       right: 28px;
       display: flex;
@@ -130,7 +130,7 @@
     .scene {
       position: absolute;
       inset: 0;
-      padding: 4.5% 5.5%;
+      padding: 3.5% 5% 10% 5%; /* extra bottom padding for teleprompter */
       display: flex;
       flex-direction: column;
       opacity: 0;
@@ -149,19 +149,14 @@
     .bento-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 20px 22px;
+      border-radius: 18px;
+      padding: 18px 20px;
       box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.05);
       position: relative;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       transition: transform 0.4s var(--spring), box-shadow 0.4s ease, border-color 0.3s;
-    }
-
-    .bento-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08);
     }
 
     .pill-tag {
@@ -175,24 +170,24 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       width: fit-content;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .title-display {
-      font-size: clamp(26px, 3.2vw, 44px);
+      font-size: clamp(24px, 2.9vw, 40px);
       font-weight: 900;
       letter-spacing: -0.04em;
       line-height: 1.1;
       color: var(--ink);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     .desc-sub {
-      font-size: clamp(13px, 1.4vw, 17px);
+      font-size: clamp(12px, 1.3vw, 16px);
       color: var(--dim);
-      line-height: 1.45;
+      line-height: 1.4;
       max-width: 65ch;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
 
     /* Animated Simulated Mouse Cursor */
@@ -206,14 +201,117 @@
       filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
     }
 
+    /* =========================================================================
+       SYNCHRONIZED ENGLISH TELEPROMPTER / SUBTITLE BAR
+       ========================================================================= */
+    #teleprompter-bar {
+      position: absolute;
+      bottom: 64px; /* sits right above playback controls */
+      left: 28px;
+      right: 28px;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+      z-index: 85;
+      transition: opacity 0.3s, transform 0.3s var(--spring);
+    }
+
+    #teleprompter-bar.hide-teleprompter {
+      opacity: 0;
+      transform: translateY(30px);
+      pointer-events: none;
+    }
+
+    .tele-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 87, 34, 0.2);
+      border: 1px solid var(--coral);
+      color: #ff8a65;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      white-space: nowrap;
+    }
+
+    .rec-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--coral);
+      border-radius: 50%;
+      animation: pulseDot 1.4s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.7); opacity: 0.5; }
+    }
+
+    .tele-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow: hidden;
+    }
+
+    .tele-speech-cue {
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tele-active-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.35;
+      transition: all 0.2s ease;
+    }
+
+    .tele-pace-line {
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      position: relative;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+
+    .tele-pace-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: linear-gradient(90deg, #ff5722, #00f0ff);
+      border-radius: 999px;
+    }
+
     /* Bottom Control Bar */
     #controls {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      height: 60px;
-      background: rgba(255, 255, 255, 0.95);
+      height: 56px;
+      background: rgba(255, 255, 255, 0.96);
       backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       display: flex;
@@ -230,8 +328,8 @@
     }
 
     .play-btn {
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: var(--coral);
       border: none;
@@ -240,8 +338,8 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 15px;
-      box-shadow: 0 6px 14px rgba(255, 87, 34, 0.3);
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(255, 87, 34, 0.3);
       transition: transform 0.2s;
     }
 
@@ -251,7 +349,7 @@
 
     .timeline-wrap {
       flex: 1;
-      height: 28px;
+      height: 26px;
       display: flex;
       align-items: center;
       cursor: pointer;
@@ -329,10 +427,7 @@
     <!-- STAGE WRAPPER -->
     <div id="stage">
 
-      <!-- =========================================================================
-           SCENE 1: THE TWO-SIDED PAIN (00:00 - 00:14)
-           Vivid, Emotional, Two-Sided Crisis (Shopper Anxiety vs Merchant Bleed)
-           ========================================================================= -->
+      <!-- SCENE 1: THE DUAL CRISIS (00:00 - 00:14) -->
       <div class="scene" id="scene-1">
         <div class="pill-tag" style="background: var(--rose-light); color: var(--rose);">
           ● THE E-COMMERCE RETURNS CRISIS
@@ -341,67 +436,60 @@
           Returns Are Broken For Everyone.
         </div>
         <div class="desc-sub">
-          Shoppers feel trapped in endless waiting loops. Merchants hemorrhage billions to fraud, empty boxes, and wardrobing.
+          Shoppers wait weeks for their own money. Merchants hemorrhage billions to wardrobing and empty box scams.
         </div>
 
-        <!-- 3-Column Emotional Bento Grid -->
-        <div style="display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 18px; width: 100%; flex: 1;">
+        <div style="display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 16px; width: 100%; flex: 1;">
           
-          <!-- Shopper's Agony Card -->
-          <div class="bento-card" style="border-left: 4px solid var(--rose); background: #ffffff;">
+          <div class="bento-card" style="border-left: 4px solid var(--rose);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: 800; color: var(--rose); text-transform: uppercase;">THE SHOPPER'S AGONY</span>
-              <span style="font-size: 20px;">😰</span>
+              <span style="font-size: 10px; font-weight: 800; color: var(--rose);">THE SHOPPER'S AGONY</span>
+              <span style="font-size: 18px;">😰</span>
             </div>
-            <div style="margin-top: 12px; font-size: 18px; font-weight: 800; color: var(--ink);">$380 Trapped in Limbo</div>
+            <div style="margin-top: 6px; font-size: 16px; font-weight: 800; color: var(--ink);">$380 Trapped in Limbo</div>
             
-            <div style="margin-top: 12px; background: #fff1f2; border-radius: 12px; padding: 12px; border: 1px solid rgba(244, 63, 94, 0.2);">
-              <div style="font-size: 11px; font-weight: 700; color: var(--rose);">SUPPORT CHAT · DAY 12:</div>
-              <div style="font-size: 12px; color: var(--dim); margin-top: 4px; font-style: italic;">
-                "Where is my money? You received my package 5 days ago!"
+            <div style="margin-top: 10px; background: #fff1f2; border-radius: 10px; padding: 10px; border: 1px solid rgba(244, 63, 94, 0.2);">
+              <div style="font-size: 10px; font-weight: 800; color: var(--rose);">SUPPORT CHAT · DAY 12:</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 3px; font-style: italic;">
+                "Where is my money? You signed for my returned package 5 days ago!"
               </div>
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 6px; font-weight: 600;">
-                Agent: "Please wait 7-14 business days for warehouse inspection."
+              <div style="font-size: 10px; color: #94a3b8; margin-top: 4px; font-weight: 600;">
+                Agent: "Please allow 7-14 business days for warehouse inspection."
               </div>
             </div>
 
-            <div style="margin-top: auto; padding-top: 12px; font-size: 11px; color: var(--dim); display: flex; gap: 6px; align-items: center;">
-              <span style="color: var(--rose); font-weight: 800;">✕</span> 0 transparency · High anxiety · Friction
+            <div style="margin-top: auto; padding-top: 8px; font-size: 10px; color: var(--dim);">
+              <span style="color: var(--rose); font-weight: 800;">✕</span> Zero transparency · High anxiety · Friction
             </div>
           </div>
 
-          <!-- Central Catastrophe Macro Stat -->
           <div class="bento-card" style="align-items: center; justify-content: center; text-align: center; background: linear-gradient(180deg, #ffffff 0%, #fff5f5 100%); border-color: rgba(244, 63, 94, 0.3);">
-            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);">ANNUAL INDUSTRY DESTRUCTION</div>
-            <div style="font-size: 54px; font-weight: 900; color: var(--rose); line-height: 1; margin: 12px 0;" id="s1-counter">$800B</div>
-            <div style="font-size: 13px; font-weight: 700; color: var(--ink);">Destroyed in Return Inefficiencies</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 8px; line-height: 1.4;">
-              15% Return fraud rate · 30% Salvage value loss · Countless lost customers
-            </div>
-            <div style="margin-top: 14px; background: rgba(244, 63, 94, 0.1); color: var(--rose); padding: 4px 12px; border-radius: 999px; font-size: 10px; font-weight: 800;">
-              STATUS QUO IS UNSUSTAINABLE
+            <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);">ANNUAL INDUSTRY DESTRUCTION</div>
+            <div style="font-size: 48px; font-weight: 900; color: var(--rose); line-height: 1; margin: 8px 0;" id="s1-counter">$800B</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Lost Annually in Return Inefficiencies</div>
+            <div style="font-size: 10px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
+              15% Return fraud rate · 30% Salvage value loss · Countless lost buyers
             </div>
           </div>
 
-          <!-- Merchant's Nightmare Card -->
-          <div class="bento-card" style="border-left: 4px solid var(--amber); background: #ffffff;">
+          <div class="bento-card" style="border-left: 4px solid var(--amber);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: 800; color: var(--amber); text-transform: uppercase;">THE MERCHANT'S NIGHTMARE</span>
-              <span style="font-size: 20px;">📦💥</span>
+              <span style="font-size: 10px; font-weight: 800; color: var(--amber);">THE MERCHANT'S NIGHTMARE</span>
+              <span style="font-size: 18px;">📦💥</span>
             </div>
-            <div style="margin-top: 12px; font-size: 18px; font-weight: 800; color: var(--ink);">Wardrobing &amp; Box Scams</div>
+            <div style="margin-top: 6px; font-size: 16px; font-weight: 800; color: var(--ink);">Wardrobing &amp; Box Scams</div>
             
-            <div style="margin-top: 12px; background: #fffbeb; border-radius: 12px; padding: 12px; border: 1px solid rgba(245, 158, 11, 0.2);">
-              <div style="font-size: 11px; font-weight: 700; color: var(--amber);">RECEIVING DOCK ALERT:</div>
-              <div style="font-size: 12px; color: var(--dim); margin-top: 4px;">
+            <div style="margin-top: 10px; background: #fffbeb; border-radius: 10px; padding: 10px; border: 1px solid rgba(245, 158, 11, 0.2);">
+              <div style="font-size: 10px; font-weight: 800; color: var(--amber);">RECEIVING DOCK ALERT:</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 3px;">
                 Returned box for Sony WH-1000XM5 contained a <b>brick &amp; fake wires</b>.
               </div>
-              <div style="font-size: 11px; color: var(--rose); margin-top: 6px; font-weight: 700;">
-                Chargeback Claim Opened · $45 Bank Dispute Penalty
+              <div style="font-size: 10px; color: var(--rose); margin-top: 4px; font-weight: 700;">
+                Chargeback Opened · $45 Bank Dispute Penalty
               </div>
             </div>
 
-            <div style="margin-top: auto; padding-top: 12px; font-size: 11px; color: var(--dim); display: flex; gap: 6px; align-items: center;">
+            <div style="margin-top: auto; padding-top: 8px; font-size: 10px; color: var(--dim);">
               <span style="color: var(--amber); font-weight: 800;">✕</span> Zero cryptographic proof of item condition
             </div>
           </div>
@@ -409,81 +497,72 @@
         </div>
       </div>
 
-
-      <!-- =========================================================================
-           SCENE 2: WHAT IS PROOFRETURN? (00:14 - 00:28)
-           Dense, High-Context 4-Pillar System Architecture Bento
-           ========================================================================= -->
+      <!-- SCENE 2: WHAT IS PROOFRETURN (00:14 - 00:28) -->
       <div class="scene" id="scene-2">
         <div class="pill-tag" style="background: var(--coral-light); color: var(--coral);">
           ★ INTRODUCING PROOFRETURN
         </div>
         <div class="title-display">
-          The Cryptographic Trust Protocol for Modern Commerce.
+          The Cryptographic Trust Protocol for Commerce.
         </div>
         <div class="desc-sub">
-          ProofReturn replaces manual guesswork with hardware-bonded genesis passports, mathematically indexed refund curves, and automated instant escrow.
+          Replacing guesswork with hardware-bonded genesis passports, mathematical refund curves, and automated instant escrow.
         </div>
 
-        <!-- 4-Pillar Co-Existing System Architecture Bento -->
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; flex: 1;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; flex: 1;">
           
-          <!-- Pillar 1 -->
           <div class="bento-card" style="border-top: 4px solid var(--coral);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 10px; font-weight: 800; color: var(--coral); font-family: ui-monospace;">01 // THE MINT</span>
-              <span style="font-size: 18px;">🛡️</span>
+              <span style="font-size: 16px;">🛡️</span>
             </div>
-            <div style="font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 8px;">Digital Passport (DPP)</div>
-            <div style="font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
-              Before shipping, items are sealed with an <b>Ed25519 digital signature</b>, locking weight (250g) and serial hash to ledger.
+            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Digital Passport (DPP)</div>
+            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+              Items are sealed with an <b>Ed25519 signature</b> before shipping, locking weight and serial hash.
             </div>
-            <div style="margin-top: auto; background: var(--coral-light); color: var(--coral); padding: 5px 10px; border-radius: 8px; font-size: 10px; font-weight: 800;">
+            <div style="margin-top: auto; background: var(--coral-light); color: var(--coral); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
               TAMPER-PROOF GENESIS
             </div>
           </div>
 
-          <!-- Pillar 2 -->
           <div class="bento-card" style="border-top: 4px solid var(--mint);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 10px; font-weight: 800; color: var(--mint); font-family: ui-monospace;">02 // THE NOTE</span>
-              <span style="font-size: 18px;">📈</span>
+              <span style="font-size: 16px;">📈</span>
             </div>
-            <div style="font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 8px;">CIRC Curve Engine</div>
-            <div style="font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
-              <b>Condition-Indexed Refund Curve</b>: Transparent formula bounded by US/EU statutes ($380 $\rightarrow$ A:100%, B:95%, C:80%, D:50%).
+            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">CIRC Curve Engine</div>
+            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+              Condition-Indexed Refund Curve legally bounded by US/EU statutes ($380 $\rightarrow$ A:100%, B:95%, C:80%, D:50%).
             </div>
-            <div style="margin-top: auto; background: var(--mint-light); color: var(--mint); padding: 5px 10px; border-radius: 8px; font-size: 10px; font-weight: 800;">
+            <div style="margin-top: auto; background: var(--mint-light); color: var(--mint); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
               LEGAL CERTAINTY
             </div>
           </div>
 
-          <!-- Pillar 3 -->
           <div class="bento-card" style="border-top: 4px solid var(--indigo);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 10px; font-weight: 800; color: var(--indigo); font-family: ui-monospace;">03 // THE CLAIM</span>
-              <span style="font-size: 18px;">📸</span>
+              <span style="font-size: 16px;">📸</span>
             </div>
-            <div style="font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 8px;">Anti-Spoof Nonce</div>
-            <div style="font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
-              Shopper writes a dynamic physical code (e.g. <code>PR-7F3K</code>) next to item. Vision AI verifies real-time presence, rejecting spoof photos.
+            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Anti-Spoof Nonce</div>
+            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+              Shopper writes a dynamic physical code (e.g. <code>PR-7F3K</code>) next to item. Vision AI verifies real-time presence.
             </div>
-            <div style="margin-top: auto; background: var(--indigo-light); color: var(--indigo); padding: 5px 10px; border-radius: 8px; font-size: 10px; font-weight: 800;">
+            <div style="margin-top: auto; background: var(--indigo-light); color: var(--indigo); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
               ADVISORY VISION TRIAGE
             </div>
           </div>
 
-          <!-- Pillar 4 -->
           <div class="bento-card" style="border-top: 4px solid var(--amber);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 10px; font-weight: 800; color: var(--amber); font-family: ui-monospace;">04 // THE LEDGER</span>
-              <span style="font-size: 18px;">⚡️</span>
+              <span style="font-size: 16px;">⚡️</span>
             </div>
-            <div style="font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 8px;">Multi-Tranche Payout</div>
-            <div style="font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
-              <b>Tranche R0 ($361)</b> releases instantly upon dropoff. Holdback escrow ($15) settles automatically via fail-closed outbox.
+            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Multi-Tranche Payout</div>
+            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+              <b>Tranche R0 ($361)</b> releases instantly at dropoff. Holdback escrow ($15) settles automatically via fail-closed outbox.
             </div>
-            <div style="margin-top: auto; background: var(--amber-light); color: var(--amber); padding: 5px 10px; border-radius: 8px; font-size: 10px; font-weight: 800;">
+            <div style="margin-top: auto; background: var(--amber-light); color: var(--amber); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
               VELOCITY &amp; ZERO LOSS
             </div>
           </div>
@@ -491,11 +570,7 @@
         </div>
       </div>
 
-
-      <!-- =========================================================================
-           SCENE 3: LIVE SIMULATION (CIRC SLIDER + NONCE + ESCROW) (00:28 - 00:44)
-           Interactive, Multi-Widget Screen Showing How It Actually Works
-           ========================================================================= -->
+      <!-- SCENE 3: LIVE SIMULATION & PAYOUT (00:28 - 00:44) -->
       <div class="scene" id="scene-3">
         <div class="pill-tag" style="background: var(--mint-light); color: var(--mint);">
           ⚡️ THE COMPLETE RETURN EXPERIENCE
@@ -507,37 +582,34 @@
           Transparent curve dials calculate value; dynamic nonce challenge unlocks instant Fast-Lane money release in seconds.
         </div>
 
-        <!-- Split Interactive Layout (Left: CIRC Curve Slider / Right: Shopper Nonce & Instant Drop) -->
-        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; width: 100%; flex: 1;">
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; width: 100%; flex: 1;">
           
-          <!-- Left: CIRC Interactive Slider Card -->
           <div class="bento-card" id="slider-card" style="justify-content: space-between;">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                <span style="font-size: 11px; font-weight: 800; color: var(--dim); text-transform: uppercase;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--dim); text-transform: uppercase;">
                   THE NOTE · STOREFRONT POLICY
                 </span>
-                <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;">
+                <span style="background: #f1f5f9; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;">
                   MSRP $380.00
                 </span>
               </div>
-              <div style="font-size: 22px; font-weight: 900; color: var(--ink); margin-top: 4px;" id="s3-grade-title">
+              <div style="font-size: 20px; font-weight: 900; color: var(--ink); margin-top: 3px;" id="s3-grade-title">
                 Grade A (Pristine · 100%)
               </div>
-              <div style="font-size: 12px; color: var(--dim); margin-top: 2px;">
+              <div style="font-size: 11px; color: var(--dim);">
                 Guaranteed minimum legal refund based on observable physical state.
               </div>
             </div>
 
-            <!-- Dynamic Slider Bar -->
-            <div style="position: relative; margin: 18px 0;" id="slider-container">
-              <div style="height: 14px; background: #e2e8f0; border-radius: 999px; position: relative;">
+            <div style="position: relative; margin: 12px 0;" id="slider-container">
+              <div style="height: 12px; background: #e2e8f0; border-radius: 999px; position: relative;">
                 <div id="slider-fill" style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, #ff5722 0%, #10b981 100%); border-radius: 999px;"></div>
-                <div id="slider-thumb" style="position: absolute; top: 50%; right: 0; width: 34px; height: 34px; border-radius: 50%; background: #ffffff; border: 3px solid #ff5722; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translate(50%, -50%); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; color: #ff5722;">
+                <div id="slider-thumb" style="position: absolute; top: 50%; right: 0; width: 30px; height: 30px; border-radius: 50%; background: #ffffff; border: 3px solid #ff5722; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transform: translate(50%, -50%); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; color: #ff5722;">
                   A
                 </div>
               </div>
-              <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 800; color: var(--dim); margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: 800; color: var(--dim); margin-top: 8px;">
                 <span>GRADE D (50% / $190)</span>
                 <span>GRADE C (80% / $304)</span>
                 <span>GRADE B (95% / $361)</span>
@@ -545,63 +617,55 @@
               </div>
             </div>
 
-            <!-- Financial Settlement Breakdown Plate -->
-            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; gap: 8px;">
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; gap: 6px;">
               <div>
-                <div style="font-size: 10px; color: var(--dim); font-weight: 700;">TRANCHE R0 (INSTANT)</div>
-                <div style="font-size: 18px; font-weight: 900; color: var(--mint);" id="s3-r0-val">$380.00</div>
+                <div style="font-size: 9px; color: var(--dim); font-weight: 700;">TRANCHE R0 (INSTANT)</div>
+                <div style="font-size: 16px; font-weight: 900; color: var(--mint);" id="s3-r0-val">$380.00</div>
               </div>
               <div>
-                <div style="font-size: 10px; color: var(--dim); font-weight: 700;">HOLDBACK ESCROW</div>
-                <div style="font-size: 18px; font-weight: 900; color: var(--coral);">$15.00</div>
+                <div style="font-size: 9px; color: var(--dim); font-weight: 700;">HOLDBACK ESCROW</div>
+                <div style="font-size: 16px; font-weight: 900; color: var(--coral);">$15.00</div>
               </div>
               <div>
-                <div style="font-size: 10px; color: var(--dim); font-weight: 700;">SETTLEMENT SPEED</div>
-                <div style="font-size: 18px; font-weight: 900; color: var(--ink);">&lt; 10 SEC</div>
+                <div style="font-size: 9px; color: var(--dim); font-weight: 700;">SETTLEMENT SPEED</div>
+                <div style="font-size: 16px; font-weight: 900; color: var(--ink);">&lt; 10 SEC</div>
               </div>
             </div>
           </div>
 
-          <!-- Right: Shopper Phone & Nonce Card with Instant Notification Drop -->
-          <div class="bento-card" style="position: relative; justify-content: space-between; background: #ffffff;">
+          <div class="bento-card" style="position: relative; justify-content: space-between;">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 11px; font-weight: 800; color: var(--indigo); text-transform: uppercase;">THE CLAIM · FAST-LANE TRIAGE</span>
-                <span style="background: var(--mint-light); color: var(--mint); padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800;">FAST-LANE READY</span>
+                <span style="font-size: 10px; font-weight: 800; color: var(--indigo); text-transform: uppercase;">THE CLAIM · FAST-LANE TRIAGE</span>
+                <span style="background: var(--mint-light); color: var(--mint); padding: 3px 8px; border-radius: 999px; font-size: 9px; font-weight: 800;">FAST-LANE READY</span>
               </div>
-              <div style="font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 4px;">Dynamic Nonce Verification</div>
+              <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 2px;">Dynamic Nonce Verification</div>
             </div>
 
-            <!-- Paper Nonce Physical Card Widget -->
-            <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 14px; padding: 16px; text-align: center;">
-              <div style="font-size: 10px; font-weight: 800; color: var(--dim); letter-spacing: 0.1em;">WRITE CODE ON PAPER &amp; PHOTOGRAPH:</div>
-              <div style="font-size: 22px; font-weight: 900; color: var(--indigo); font-family: ui-monospace, monospace; letter-spacing: 0.15em; margin: 4px 0;">
+            <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 12px; text-align: center;">
+              <div style="font-size: 9px; font-weight: 800; color: var(--dim); letter-spacing: 0.1em;">WRITE CODE ON PAPER &amp; PHOTOGRAPH:</div>
+              <div style="font-size: 18px; font-weight: 900; color: var(--indigo); font-family: ui-monospace, monospace; letter-spacing: 0.15em; margin: 3px 0;">
                 PR-7F3K-92QD
               </div>
-              <div style="font-size: 11px; color: var(--mint); font-weight: 700;">
-                ✓ Full Token Exact Match Validated (Zero Spoofing)
+              <div style="font-size: 10px; color: var(--mint); font-weight: 700;">
+                ✓ Exact Token Match (Anti-Spoof Validated)
               </div>
             </div>
 
-            <!-- Instant Payout Notification Drop Banner -->
-            <div id="instant-payout-banner" style="background: var(--mint); color: #ffffff; border-radius: 14px; padding: 14px 18px; box-shadow: 0 14px 28px rgba(16, 185, 129, 0.35); transform: translateY(40px) scale(0.9); opacity: 0; transition: all 0.5s var(--spring);">
+            <div id="instant-payout-banner" style="background: var(--mint); color: #ffffff; border-radius: 12px; padding: 12px 16px; box-shadow: 0 12px 24px rgba(16, 185, 129, 0.35); transform: translateY(30px) scale(0.9); opacity: 0; transition: all 0.5s var(--spring);">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;">⚡️ INSTANT TRANCHE R0 PAID</span>
-                <span style="font-size: 16px;">🎉</span>
+                <span style="font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;">⚡️ INSTANT TRANCHE R0 PAID</span>
+                <span style="font-size: 15px;">🎉</span>
               </div>
-              <div style="font-size: 26px; font-weight: 900; margin-top: 2px;" id="s3-final-payout">$361.00 USD</div>
-              <div style="font-size: 11px; opacity: 0.9;">Deposited directly to PayPal wallet at drop-off scan.</div>
+              <div style="font-size: 22px; font-weight: 900; margin-top: 2px;" id="s3-final-payout">$361.00 USD</div>
+              <div style="font-size: 10px; opacity: 0.9;">Deposited directly to PayPal wallet at drop-off scan.</div>
             </div>
           </div>
 
         </div>
       </div>
 
-
-      <!-- =========================================================================
-           SCENE 4: PRODUCTION INTEGRITY & FRAUD PROTECTION (00:44 - 00:54)
-           Merchant Console, Audit Integrity, Fail-Closed Security
-           ========================================================================= -->
+      <!-- SCENE 4: PRODUCTION INTEGRITY & SECURITY (00:44 - 00:54) -->
       <div class="scene" id="scene-4">
         <div class="pill-tag" style="background: var(--indigo-light); color: var(--indigo);">
           🛡 PRODUCTION INTEGRITY &amp; MERCH SECURITY
@@ -613,34 +677,34 @@
           Invariant INV-05 enforces that AI is strictly advisory. Custody and monetary actions are backed by deterministic fail-closed outbox patterns.
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; width: 100%; flex: 1;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; flex: 1;">
           
           <div class="bento-card" style="border-top: 4px solid var(--mint);">
-            <div style="font-size: 11px; font-weight: 800; color: var(--mint);">THE LEDGER // REVIEW QUEUE</div>
-            <div style="font-size: 38px; font-weight: 900; color: var(--ink); margin: 8px 0;">279/279</div>
-            <div style="font-size: 13px; font-weight: 700; color: var(--mint);">Automated Tests Passed</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+            <div style="font-size: 10px; font-weight: 800; color: var(--mint);">THE LEDGER // REVIEW QUEUE</div>
+            <div style="font-size: 34px; font-weight: 900; color: var(--ink); margin: 6px 0;">279/279</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--mint);">Automated Tests Passed</div>
+            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
               92%+ code coverage across state machine, custody ledgers, and jurisdiction caps.
             </div>
           </div>
 
           <div class="bento-card" style="border-top: 4px solid var(--coral);">
-            <div style="font-size: 11px; font-weight: 800; color: var(--coral);">FAIL-CLOSED OUTBOX</div>
-            <div style="font-size: 38px; font-weight: 900; color: var(--coral); margin: 8px 0;">0 LEAK</div>
-            <div style="font-size: 13px; font-weight: 700; color: var(--ink);">Strict Idempotency</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
-              Every payment tranche requires an idempotency key. Network crashes will never trigger duplicate refunds.
+            <div style="font-size: 10px; font-weight: 800; color: var(--coral);">FAIL-CLOSED OUTBOX</div>
+            <div style="font-size: 34px; font-weight: 900; color: var(--coral); margin: 6px 0;">0 LEAK</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Strict Idempotency</div>
+            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
+              Every payment tranche requires an idempotency key. Network retries will never duplicate refunds.
             </div>
           </div>
 
           <div class="bento-card" style="border-top: 4px solid var(--indigo);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: 800; color: var(--indigo);">DISPUTE PROTECTION</span>
-              <span style="font-size: 16px;">🔒</span>
+              <span style="font-size: 10px; font-weight: 800; color: var(--indigo);">DISPUTE PROTECTION</span>
+              <span style="font-size: 15px;">🔒</span>
             </div>
-            <div style="font-size: 38px; font-weight: 900; color: var(--indigo); margin: 8px 0;">FREEZE</div>
-            <div style="font-size: 13px; font-weight: 700; color: var(--ink);">Automated Webhook Defense</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
+            <div style="font-size: 34px; font-weight: 900; color: var(--indigo); margin: 6px 0;">FREEZE</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Automated Webhook Defense</div>
+            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
               Incoming PayPal disputes immediately freeze further settlement tranches (FR-75), protecting merchant cash.
             </div>
           </div>
@@ -648,43 +712,60 @@
         </div>
       </div>
 
-
-      <!-- =========================================================================
-           SCENE 5: FINALE & THE NEW STANDARD (00:54 - 01:00)
-           Clean, Memorable Slogan & Summary
-           ========================================================================= -->
+      <!-- SCENE 5: FINALE (00:54 - 01:00) -->
       <div class="scene" id="scene-5" style="align-items: center; justify-content: center; text-align: center;">
-        
-        <div style="width: 64px; height: 64px; border-radius: 20px; background: linear-gradient(135deg, #ff5722 0%, #ff8a65 100%); display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 16px 32px rgba(255, 87, 34, 0.35); color: #fff; margin-bottom: 20px;">
+        <div style="width: 56px; height: 56px; border-radius: 18px; background: linear-gradient(135deg, #ff5722 0%, #ff8a65 100%); display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 14px 28px rgba(255, 87, 34, 0.35); color: #fff; margin-bottom: 14px;">
           🛡️
         </div>
 
-        <div class="title-display" style="font-size: 58px; margin-bottom: 8px;">
+        <div class="title-display" style="font-size: 52px; margin-bottom: 6px;">
           ProofReturn
         </div>
 
-        <div style="font-size: 24px; font-weight: 700; color: var(--ink); margin-bottom: 20px;">
+        <div style="font-size: 20px; font-weight: 700; color: var(--ink); margin-bottom: 16px;">
           Instant Trust for Shoppers. <span style="color: var(--coral);">Zero Fraud for Merchants.</span>
         </div>
 
-        <div style="display: flex; gap: 12px; margin-bottom: 28px;">
-          <span style="background: var(--coral-light); color: var(--coral); padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 800;">
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <span style="background: var(--coral-light); color: var(--coral); padding: 5px 14px; border-radius: 999px; font-size: 11px; font-weight: 800;">
             Ed25519 Passports
           </span>
-          <span style="background: var(--mint-light); color: var(--mint); padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 800;">
+          <span style="background: var(--mint-light); color: var(--mint); padding: 5px 14px; border-radius: 999px; font-size: 11px; font-weight: 800;">
             CIRC Curve Engine
           </span>
-          <span style="background: var(--indigo-light); color: var(--indigo); padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 800;">
+          <span style="background: var(--indigo-light); color: var(--indigo); padding: 5px 14px; border-radius: 999px; font-size: 11px; font-weight: 800;">
             Fast-Lane Instant Escrow
           </span>
         </div>
 
-        <div style="font-size: 13px; color: var(--dim); font-weight: 600;">
+        <div style="font-size: 12px; color: var(--dim); font-weight: 600;">
           The return problem is finally solved. ✨
         </div>
-
       </div>
 
+    </div>
+
+    <!-- =========================================================================
+         SYNCHRONIZED ENGLISH TELEPROMPTER / VOICE-OVER HUD
+         ========================================================================= -->
+    <div id="teleprompter-bar">
+      <div class="tele-badge">
+        <span class="rec-dot"></span>
+        <span>VOICEOVER HUD (EN)</span>
+      </div>
+      <div class="tele-content">
+        <div class="tele-speech-cue">
+          <span id="tele-cue-tone">EMPATHETIC, HOOK</span>
+          <span>·</span>
+          <span id="tele-cue-time">00:00 - 00:05</span>
+        </div>
+        <div class="tele-active-text" id="tele-active-text">
+          "Have you ever returned an online purchase and waited weeks wondering where your money went?"
+        </div>
+        <div class="tele-pace-line">
+          <div class="tele-pace-fill" id="tele-pace-fill"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Playback Controls -->
@@ -696,6 +777,9 @@
         </div>
       </div>
       <div class="time-readout" id="time-display">00:00 / 01:00</div>
+      <button class="btn-secondary" id="btn-tele" title="Toggle Teleprompter (T)">
+        🎙️ TELEPROMPTER
+      </button>
       <button class="btn-secondary" id="btn-sound" title="Toggle Sound">
         <span id="sound-icon">🔊</span> AUDIO ON
       </button>
@@ -706,7 +790,83 @@
   </div>
 
   <script>
-    // --- 1. WEB AUDIO SYNTHESIZER ---
+    // --- 1. ENGLISH SYNCHRONIZED TRANSCRIPTION SCRIPT (60 SECONDS TOTAL) ---
+    const TRANSCRIPT = [
+      {
+        start: 0,
+        end: 5000,
+        cue: "EMPATHETIC, HOOK",
+        text: "Have you ever returned an online purchase and waited weeks wondering where your money went?"
+      },
+      {
+        start: 5000,
+        end: 10000,
+        cue: "SERIOUS, INDUSTRY PAIN",
+        text: "Meanwhile, merchants lose $800 billion every year to return fraud, empty boxes, and counterfeit swaps."
+      },
+      {
+        start: 10000,
+        end: 14000,
+        cue: "DRAMATIC PAUSE",
+        text: "Shoppers feel cheated. Merchants feel robbed. Trust in online commerce is completely broken."
+      },
+      {
+        start: 14000,
+        end: 19000,
+        cue: "EXCITED, UPLIFTING",
+        text: "Meet ProofReturn: the first cryptographic trust protocol for modern retail!"
+      },
+      {
+        start: 19000,
+        end: 24000,
+        cue: "AUTHORITATIVE, ARCHITECTURE",
+        text: "We bond every item to an Ed25519 Digital Product Passport with statutory refund curves,"
+      },
+      {
+        start: 24000,
+        end: 28000,
+        cue: "CRISP, VELOCITY",
+        text: "combining anti-spoof physical nonce challenges with automated multi-tranche instant escrow."
+      },
+      {
+        start: 28000,
+        end: 34000,
+        cue: "GUIDING THE VIEWER'S EYES",
+        text: "Watch it work: our CIRC engine transparently calculates fair payouts based on verified condition."
+      },
+      {
+        start: 34000,
+        end: 39000,
+        cue: "INSTRUCTIVE, REASSURING",
+        text: "Shoppers simply snap a photo with a physical handwritten nonce code to prevent digital spoofing,"
+      },
+      {
+        start: 39000,
+        end: 44000,
+        cue: "ENERGETIC, CELEBRATORY",
+        text: "and BAM! The instant refund hits their PayPal wallet in under 10 seconds—before the package even leaves town!"
+      },
+      {
+        start: 44000,
+        end: 49000,
+        cue: "TECHNICAL, TRUSTWORTHY",
+        text: "Behind the scenes, our AI is strictly advisory. Custody is governed by fail-closed code verified by 279 automated tests,"
+      },
+      {
+        start: 49000,
+        end: 54000,
+        cue: "FIRM, FRAUD PROTECTION",
+        text: "with automated dispute-freeze protection that instantly halts payouts if bad actors try to scam."
+      },
+      {
+        start: 54000,
+        end: 60000,
+        cue: "INSPIRING FINALE",
+        text: "ProofReturn: Instant trust for shoppers. Zero fraud for merchants. Returns solved. Finally!"
+      }
+    ];
+
+    // --- 2. WEB AUDIO SYNTHESIZER ---
     const AudioEngine = {
       ctx: null,
       enabled: true,
@@ -741,7 +901,7 @@
       }
     };
 
-    // --- 2. CONFETTI BURST (Scene 3 & 5) ---
+    // --- 3. CONFETTI BURST (Scene 3 & 5) ---
     const confettiCanvas = document.getElementById("confetti-canvas");
     const cCtx = confettiCanvas.getContext("2d");
     let confettiParticles = [];
@@ -795,7 +955,7 @@
       }
     }
 
-    // --- 3. TIMELINE & FRAMER ANIMATION ENGINE (60 Seconds) ---
+    // --- 4. TIMELINE & FRAMER ANIMATION ENGINE ---
     const TOTAL_DURATION_MS = 60000;
     let currentTimeMs = 0;
     let isPlaying = false;
@@ -817,8 +977,16 @@
     const btnPlay = document.getElementById("btn-play");
     const timeline = document.getElementById("timeline");
     const btnSound = document.getElementById("btn-sound");
+    const btnTele = document.getElementById("btn-tele");
     const btnFullscreen = document.getElementById("btn-fullscreen");
     const cursor = document.getElementById("cursor");
+
+    // Teleprompter DOM
+    const teleprompterBar = document.getElementById("teleprompter-bar");
+    const teleCueTone = document.getElementById("tele-cue-tone");
+    const teleCueTime = document.getElementById("tele-cue-time");
+    const teleActiveText = document.getElementById("tele-active-text");
+    const telePaceFill = document.getElementById("tele-pace-fill");
 
     // Dynamic Scene 3 Elements
     const sliderThumb = document.getElementById("slider-thumb");
@@ -827,6 +995,13 @@
     const s3R0Val = document.getElementById("s3-r0-val");
     const instantPayoutBanner = document.getElementById("instant-payout-banner");
     const s3FinalPayout = document.getElementById("s3-final-payout");
+
+    function formatMmSs(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const remS = s % 60;
+      return `${String(m).padStart(2,'0')}:${String(remS).padStart(2,'0')}`;
+    }
 
     function render(timeMs) {
       let activeIdx = scenes.findIndex(s => timeMs >= s.start && timeMs < s.end);
@@ -845,10 +1020,21 @@
       // Timeline Progress
       const pct = Math.min(100, (timeMs / TOTAL_DURATION_MS) * 100);
       progressBar.style.width = `${pct}%`;
-      const s = Math.floor(timeMs / 1000);
-      const m = Math.floor(s / 60);
-      const remS = s % 60;
-      timeDisplay.textContent = `${String(m).padStart(2,'0')}:${String(remS).padStart(2,'0')} / 01:00`;
+      timeDisplay.textContent = `${formatMmSs(timeMs)} / 01:00`;
+
+      // Teleprompter Synchronization
+      const activeTele = TRANSCRIPT.find(t => timeMs >= t.start && timeMs < t.end) || TRANSCRIPT[TRANSCRIPT.length - 1];
+      if (activeTele) {
+        teleCueTone.textContent = activeTele.cue;
+        teleCueTime.textContent = `${formatMmSs(activeTele.start)} - ${formatMmSs(activeTele.end)}`;
+        teleActiveText.textContent = `"${activeTele.text}"`;
+        
+        // Pace fill percentage within current sentence
+        const segmentDuration = activeTele.end - activeTele.start;
+        const segmentElapsed = timeMs - activeTele.start;
+        const segmentPct = Math.min(100, Math.max(0, (segmentElapsed / segmentDuration) * 100));
+        telePaceFill.style.width = `${segmentPct}%`;
+      }
 
       // Scene 3 Interactive Cursor & Slider (28s - 44s)
       if (currentScene === 2) {
@@ -858,11 +1044,10 @@
         const sliderCard = document.getElementById("slider-card");
         const sliderCardRect = sliderCard.getBoundingClientRect();
 
-        // Drag from 100% (Grade A) to 95% (Grade B)
         let dragProgress = 1.0;
         if (subMs > 2500) {
           const t = Math.min(1, (subMs - 2500) / 3500);
-          dragProgress = 1.0 - (t * 0.05); // drags to 0.95 (Grade B)
+          dragProgress = 1.0 - (t * 0.05);
 
           if (t > 0.3 && !window.__s3_ticked) {
             AudioEngine.sfxTick();
@@ -876,7 +1061,6 @@
         sliderFill.style.width = `${thumbPct}%`;
         sliderThumb.style.right = `${100 - thumbPct}%`;
 
-        // Position virtual cursor over thumb
         const thumbX = sliderCardRect.left + (sliderCardRect.width - 60) * (thumbPct / 100) + 28;
         const thumbY = sliderCardRect.top + 130;
         cursor.style.transform = `translate(${thumbX}px, ${thumbY}px)`;
@@ -895,7 +1079,6 @@
           s3R0Val.textContent = "$380.00";
         }
 
-        // Instant Payout Banner Drops at +8s (36s total)
         if (subMs > 8000) {
           instantPayoutBanner.style.opacity = "1";
           instantPayoutBanner.style.transform = "translateY(0) scale(1)";
@@ -908,7 +1091,7 @@
           }
         } else {
           instantPayoutBanner.style.opacity = "0";
-          instantPayoutBanner.style.transform = "translateY(40px) scale(0.9)";
+          instantPayoutBanner.style.transform = "translateY(30px) scale(0.9)";
           window.__s3_confettiFired = false;
         }
       } else {
@@ -963,6 +1146,11 @@
       btnSound.innerHTML = AudioEngine.enabled ? "<span>🔊</span> AUDIO ON" : "<span>🔇</span> MUTED";
     });
 
+    btnTele.addEventListener("click", () => {
+      teleprompterBar.classList.toggle("hide-teleprompter");
+      btnTele.style.opacity = teleprompterBar.classList.contains("hide-teleprompter") ? "0.6" : "1";
+    });
+
     btnFullscreen.addEventListener("click", () => {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen();
@@ -979,6 +1167,8 @@
         btnFullscreen.click();
       } else if (e.code === "KeyH") {
         document.getElementById("controls").classList.toggle("hide-ui");
+      } else if (e.code === "KeyT") {
+        btnTele.click();
       }
     });
 
