@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ProofReturn — 60s Framer Motion Tour with Synchronized English Teleprompter</title>
+  <title>ProofReturn — 60s Framer Motion Tour with Rich UI Bento Cards</title>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -84,7 +84,7 @@
     /* Top Navigation HUD */
     .nav-pill {
       position: absolute;
-      top: 18px;
+      top: 16px;
       left: 28px;
       right: 28px;
       display: flex;
@@ -130,12 +130,12 @@
     .scene {
       position: absolute;
       inset: 0;
-      padding: 3.5% 5% 10% 5%; /* extra bottom padding for teleprompter */
+      padding: 3% 4.5% 10% 4.5%; /* room for teleprompter HUD at bottom */
       display: flex;
       flex-direction: column;
       opacity: 0;
       pointer-events: none;
-      transform: scale(0.95) translateY(20px);
+      transform: scale(0.95) translateY(18px);
       transition: opacity 0.4s var(--smooth), transform 0.6s var(--spring);
     }
 
@@ -150,13 +150,19 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 18px;
-      padding: 18px 20px;
-      box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.05);
+      padding: 16px 18px;
+      box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.06);
       position: relative;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
       transition: transform 0.4s var(--spring), box-shadow 0.4s ease, border-color 0.3s;
+    }
+
+    .bento-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 36px -10px rgba(0, 0, 0, 0.09);
     }
 
     .pill-tag {
@@ -170,11 +176,11 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       width: fit-content;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .title-display {
-      font-size: clamp(24px, 2.9vw, 40px);
+      font-size: clamp(22px, 2.7vw, 38px);
       font-weight: 900;
       letter-spacing: -0.04em;
       line-height: 1.1;
@@ -183,11 +189,30 @@
     }
 
     .desc-sub {
-      font-size: clamp(12px, 1.3vw, 16px);
+      font-size: clamp(12px, 1.25vw, 15px);
       color: var(--dim);
       line-height: 1.4;
-      max-width: 65ch;
-      margin-bottom: 14px;
+      max-width: 70ch;
+      margin-bottom: 12px;
+    }
+
+    /* Micro-UI Snippets inside Bento Cards */
+    .micro-ui-plate {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin: 10px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .micro-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      line-height: 1.4;
     }
 
     /* Animated Simulated Mouse Cursor */
@@ -201,22 +226,20 @@
       filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
     }
 
-    /* =========================================================================
-       SYNCHRONIZED ENGLISH TELEPROMPTER / SUBTITLE BAR
-       ========================================================================= */
+    /* Synchronized English Teleprompter Bar */
     #teleprompter-bar {
       position: absolute;
-      bottom: 64px; /* sits right above playback controls */
+      bottom: 62px;
       left: 28px;
       right: 28px;
       background: rgba(15, 23, 42, 0.94);
       backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
-      padding: 12px 24px;
+      padding: 10px 22px;
       display: flex;
       align-items: center;
-      gap: 18px;
+      gap: 16px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
       z-index: 85;
       transition: opacity 0.3s, transform 0.3s var(--spring);
@@ -235,10 +258,10 @@
       background: rgba(255, 87, 34, 0.2);
       border: 1px solid var(--coral);
       color: #ff8a65;
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 999px;
       font-family: ui-monospace, monospace;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
       letter-spacing: 0.1em;
       white-space: nowrap;
@@ -261,7 +284,7 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
       overflow: hidden;
     }
 
@@ -278,7 +301,7 @@
     }
 
     .tele-active-text {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: #ffffff;
       line-height: 1.35;
@@ -427,7 +450,10 @@
     <!-- STAGE WRAPPER -->
     <div id="stage">
 
-      <!-- SCENE 1: THE DUAL CRISIS (00:00 - 00:14) -->
+      <!-- =========================================================================
+           SCENE 1: THE DUAL CRISIS (00:00 - 00:14)
+           Shopper Agony vs Merchant Nightmare (Rich Bento with Simulated UIs)
+           ========================================================================= -->
       <div class="scene" id="scene-1">
         <div class="pill-tag" style="background: var(--rose-light); color: var(--rose);">
           ● THE E-COMMERCE RETURNS CRISIS
@@ -436,68 +462,99 @@
           Returns Are Broken For Everyone.
         </div>
         <div class="desc-sub">
-          Shoppers wait weeks for their own money. Merchants hemorrhage billions to wardrobing and empty box scams.
+          Shoppers wait weeks for their own money. Merchants hemorrhage billions to wardrobing, empty box scams, and counterfeit swaps.
         </div>
 
         <div style="display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 16px; width: 100%; flex: 1;">
           
+          <!-- Shopper Card with Live Tracking Snippet -->
           <div class="bento-card" style="border-left: 4px solid var(--rose);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--rose);">THE SHOPPER'S AGONY</span>
-              <span style="font-size: 18px;">😰</span>
-            </div>
-            <div style="margin-top: 6px; font-size: 16px; font-weight: 800; color: var(--ink);">$380 Trapped in Limbo</div>
-            
-            <div style="margin-top: 10px; background: #fff1f2; border-radius: 10px; padding: 10px; border: 1px solid rgba(244, 63, 94, 0.2);">
-              <div style="font-size: 10px; font-weight: 800; color: var(--rose);">SUPPORT CHAT · DAY 12:</div>
-              <div style="font-size: 11px; color: var(--dim); margin-top: 3px; font-style: italic;">
-                "Where is my money? You signed for my returned package 5 days ago!"
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--rose);">THE SHOPPER'S AGONY</span>
+                <span style="font-size: 18px;">😰</span>
               </div>
-              <div style="font-size: 10px; color: #94a3b8; margin-top: 4px; font-weight: 600;">
-                Agent: "Please allow 7-14 business days for warehouse inspection."
-              </div>
+              <div style="margin-top: 4px; font-size: 16px; font-weight: 800; color: var(--ink);">$380 Trapped in Limbo</div>
             </div>
 
-            <div style="margin-top: auto; padding-top: 8px; font-size: 10px; color: var(--dim);">
-              <span style="color: var(--rose); font-weight: 800;">✕</span> Zero transparency · High anxiety · Friction
+            <!-- Front-end Tracking UI Snippet -->
+            <div class="micro-ui-plate" style="background: #fff1f2; border-color: rgba(244, 63, 94, 0.2);">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 800; color: var(--rose);">
+                <span>PACKAGE TRACKING #RET-9821</span>
+                <span>DAY 12</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--rose);"></div>
+                <div style="flex:1; height: 3px; background: #fda4af;"></div>
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #e2e8f0;"></div>
+              </div>
+              <div style="font-size: 11px; color: var(--dim);">Status: <b>Delivered to warehouse · Pending inspection</b></div>
+              <div style="font-size: 10px; color: var(--rose); font-style: italic;">"Refund ETA: 7 to 14 business days."</div>
+            </div>
+
+            <div style="font-size: 10px; color: var(--dim); display: flex; align-items: center; gap: 6px;">
+              <span style="color: var(--rose); font-weight: 800;">✕</span> Trapped capital · Anxiety · High churn
             </div>
           </div>
 
+          <!-- Central $800B Stat -->
           <div class="bento-card" style="align-items: center; justify-content: center; text-align: center; background: linear-gradient(180deg, #ffffff 0%, #fff5f5 100%); border-color: rgba(244, 63, 94, 0.3);">
             <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim);">ANNUAL INDUSTRY DESTRUCTION</div>
-            <div style="font-size: 48px; font-weight: 900; color: var(--rose); line-height: 1; margin: 8px 0;" id="s1-counter">$800B</div>
-            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Lost Annually in Return Inefficiencies</div>
-            <div style="font-size: 10px; color: var(--dim); margin-top: 6px; line-height: 1.4;">
-              15% Return fraud rate · 30% Salvage value loss · Countless lost buyers
+            <div style="font-size: 52px; font-weight: 900; color: var(--rose); line-height: 1; margin: 8px 0;" id="s1-counter">$800B</div>
+            <div style="font-size: 13px; font-weight: 800; color: var(--ink);">Lost Annually in Return Inefficiencies</div>
+            
+            <div class="micro-ui-plate" style="width: 100%; text-align: left; background: #ffffff;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--dim);">Average Return Fraud Rate</span>
+                <b style="color: var(--rose);">15.2%</b>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--dim);">Salvage Deprecation</span>
+                <b style="color: var(--amber);">-30% to -50%</b>
+              </div>
             </div>
           </div>
 
+          <!-- Merchant Nightmare with Receiving Dock Snippet -->
           <div class="bento-card" style="border-left: 4px solid var(--amber);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--amber);">THE MERCHANT'S NIGHTMARE</span>
-              <span style="font-size: 18px;">📦💥</span>
-            </div>
-            <div style="margin-top: 6px; font-size: 16px; font-weight: 800; color: var(--ink);">Wardrobing &amp; Box Scams</div>
-            
-            <div style="margin-top: 10px; background: #fffbeb; border-radius: 10px; padding: 10px; border: 1px solid rgba(245, 158, 11, 0.2);">
-              <div style="font-size: 10px; font-weight: 800; color: var(--amber);">RECEIVING DOCK ALERT:</div>
-              <div style="font-size: 11px; color: var(--dim); margin-top: 3px;">
-                Returned box for Sony WH-1000XM5 contained a <b>brick &amp; fake wires</b>.
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--amber);">THE MERCHANT'S NIGHTMARE</span>
+                <span style="font-size: 18px;">📦💥</span>
               </div>
-              <div style="font-size: 10px; color: var(--rose); margin-top: 4px; font-weight: 700;">
+              <div style="margin-top: 4px; font-size: 16px; font-weight: 800; color: var(--ink);">Wardrobing &amp; Box Scams</div>
+            </div>
+
+            <!-- Warehouse Dock Alert Snippet -->
+            <div class="micro-ui-plate" style="background: #fffbeb; border-color: rgba(245, 158, 11, 0.25);">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 800; color: var(--amber);">
+                <span>RECEIVING DOCK INSPECTION</span>
+                <span>DISCREPANCY</span>
+              </div>
+              <div class="micro-code" style="color: var(--dim); margin-top: 2px;">
+                ORDER: ord_demo_1 · SONY WH-1000XM5<br>
+                EXPECTED WEIGHT: <b>250.0g</b><br>
+                ACTUAL WEIGHT: <b style="color: var(--rose);">420.0g (Brick detected)</b>
+              </div>
+              <div style="font-size: 10px; color: var(--rose); font-weight: 700; margin-top: 2px;">
                 Chargeback Opened · $45 Bank Dispute Penalty
               </div>
             </div>
 
-            <div style="margin-top: auto; padding-top: 8px; font-size: 10px; color: var(--dim);">
-              <span style="color: var(--amber); font-weight: 800;">✕</span> Zero cryptographic proof of item condition
+            <div style="font-size: 10px; color: var(--dim); display: flex; align-items: center; gap: 6px;">
+              <span style="color: var(--amber); font-weight: 800;">✕</span> Zero cryptographic custody · Pure fraud exposure
             </div>
           </div>
 
         </div>
       </div>
 
-      <!-- SCENE 2: WHAT IS PROOFRETURN (00:14 - 00:28) -->
+
+      <!-- =========================================================================
+           SCENE 2: WHAT IS PROOFRETURN (00:14 - 00:28)
+           Dense 4-Pillar Architecture Bento with Rich Live Front-end / Backend Previews!
+           (No more empty whitespace!)
+           ========================================================================= -->
       <div class="scene" id="scene-2">
         <div class="pill-tag" style="background: var(--coral-light); color: var(--coral);">
           ★ INTRODUCING PROOFRETURN
@@ -511,58 +568,142 @@
 
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; flex: 1;">
           
+          <!-- Pillar 1: THE MINT (Packing Station & DPP) -->
           <div class="bento-card" style="border-top: 4px solid var(--coral);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--coral); font-family: ui-monospace;">01 // THE MINT</span>
-              <span style="font-size: 16px;">🛡️</span>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--coral); font-family: ui-monospace;">01 // THE MINT</span>
+                <span style="font-size: 16px;">🛡️</span>
+              </div>
+              <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 4px;">Digital Passport (DPP)</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 2px; line-height: 1.35;">
+                Sealed before shipping with Ed25519 signature &amp; weight lock.
+              </div>
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Digital Passport (DPP)</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
-              Items are sealed with an <b>Ed25519 signature</b> before shipping, locking weight and serial hash.
+
+            <!-- Rich Front-end / Backend UI Preview Snippet (FILLS WHITESPACE) -->
+            <div class="micro-ui-plate" style="border-color: rgba(255, 87, 34, 0.2); background: #ffffff;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <b style="color: var(--ink);">Sony WH-1000XM5</b>
+                <span style="background: var(--mint-light); color: var(--mint); padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800;">SEALED</span>
+              </div>
+              <div class="micro-code" style="color: var(--dim); margin-top: 3px;">
+                DPP ID: <b>pass_demo_1</b><br>
+                TARE SCALE: <b>250.0g</b> (±0.5g)<br>
+                ALGORITHM: <b>Ed25519</b><br>
+                SIG: <span style="color: var(--coral);">ed25519:3ea4d6ef259b...</span>
+              </div>
             </div>
-            <div style="margin-top: auto; background: var(--coral-light); color: var(--coral); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
+
+            <div style="background: var(--coral-light); color: var(--coral); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; text-align: center;">
               TAMPER-PROOF GENESIS
             </div>
           </div>
 
+          <!-- Pillar 2: THE NOTE (CIRC Curve Engine) -->
           <div class="bento-card" style="border-top: 4px solid var(--mint);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--mint); font-family: ui-monospace;">02 // THE NOTE</span>
-              <span style="font-size: 16px;">📈</span>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--mint); font-family: ui-monospace;">02 // THE NOTE</span>
+                <span style="font-size: 16px;">📈</span>
+              </div>
+              <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 4px;">CIRC Curve Engine</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 2px; line-height: 1.35;">
+                Condition-Indexed Refund Curve legally bounded by US/EU statutes.
+              </div>
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">CIRC Curve Engine</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
-              Condition-Indexed Refund Curve legally bounded by US/EU statutes ($380 $\rightarrow$ A:100%, B:95%, C:80%, D:50%).
+
+            <!-- Rich Front-end Curve UI Snippet (FILLS WHITESPACE) -->
+            <div class="micro-ui-plate" style="border-color: rgba(16, 185, 129, 0.2); background: #ffffff;">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: var(--dim);">
+                <span>MSRP $380.00</span>
+                <span style="color: var(--mint);">US_CA STATUTE</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 3px;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                  <span>Grade A (100%)</span>
+                  <b>$380.00</b>
+                </div>
+                <div style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                  <div style="width: 100%; height: 100%; background: var(--mint);"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+                  <span>Grade B (95%)</span>
+                  <b style="color: var(--mint);">$361.00</b>
+                </div>
+                <div style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                  <div style="width: 95%; height: 100%; background: var(--mint);"></div>
+                </div>
+              </div>
             </div>
-            <div style="margin-top: auto; background: var(--mint-light); color: var(--mint); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
+
+            <div style="background: var(--mint-light); color: var(--mint); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; text-align: center;">
               LEGAL CERTAINTY
             </div>
           </div>
 
+          <!-- Pillar 3: THE CLAIM (Anti-Spoof Vision AI & Nonce) -->
           <div class="bento-card" style="border-top: 4px solid var(--indigo);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--indigo); font-family: ui-monospace;">03 // THE CLAIM</span>
-              <span style="font-size: 16px;">📸</span>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--indigo); font-family: ui-monospace;">03 // THE CLAIM</span>
+                <span style="font-size: 16px;">📸</span>
+              </div>
+              <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 4px;">Anti-Spoof Nonce</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 2px; line-height: 1.35;">
+                Shopper writes dynamic physical code to prove live item presence.
+              </div>
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Anti-Spoof Nonce</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
-              Shopper writes a dynamic physical code (e.g. <code>PR-7F3K</code>) next to item. Vision AI verifies real-time presence.
+
+            <!-- Rich Front-end Camera UI Snippet (FILLS WHITESPACE) -->
+            <div class="micro-ui-plate" style="border-color: rgba(99, 102, 241, 0.2); background: #ffffff;">
+              <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                <span style="font-weight: 800; color: var(--indigo);">AI VISION GRADER</span>
+                <span style="color: var(--mint);">CONF: 98%</span>
+              </div>
+              <div style="background: #f1f5f9; border-radius: 6px; padding: 6px; text-align: center; border: 1px dashed #cbd5e1; margin-top: 3px;">
+                <div style="font-size: 9px; color: var(--dim);">CHALLENGE CODE:</div>
+                <div style="font-family: ui-monospace; font-weight: 900; color: var(--indigo); font-size: 13px;">PR-7F3K-92QD</div>
+              </div>
+              <div class="micro-code" style="color: var(--dim); margin-top: 2px;">
+                STATUS: <b>TOKEN MATCH VALIDATED</b><br>
+                FAST-LANE ACCESS: <b style="color: var(--mint);">AUTHORIZED</b>
+              </div>
             </div>
-            <div style="margin-top: auto; background: var(--indigo-light); color: var(--indigo); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
+
+            <div style="background: var(--indigo-light); color: var(--indigo); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; text-align: center;">
               ADVISORY VISION TRIAGE
             </div>
           </div>
 
+          <!-- Pillar 4: THE LEDGER (Multi-Tranche Outbox) -->
           <div class="bento-card" style="border-top: 4px solid var(--amber);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--amber); font-family: ui-monospace;">04 // THE LEDGER</span>
-              <span style="font-size: 16px;">⚡️</span>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--amber); font-family: ui-monospace;">04 // THE LEDGER</span>
+                <span style="font-size: 16px;">⚡️</span>
+              </div>
+              <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 4px;">Multi-Tranche Payout</div>
+              <div style="font-size: 11px; color: var(--dim); margin-top: 2px; line-height: 1.35;">
+                Instant R0 ($361) at dropoff; escrow ($15) settled via outbox.
+              </div>
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: var(--ink); margin-top: 6px;">Multi-Tranche Payout</div>
-            <div style="font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.4;">
-              <b>Tranche R0 ($361)</b> releases instantly at dropoff. Holdback escrow ($15) settles automatically via fail-closed outbox.
+
+            <!-- Rich Backend Outbox Log Snippet (FILLS WHITESPACE) -->
+            <div class="micro-ui-plate" style="border-color: rgba(245, 158, 11, 0.2); background: #ffffff;">
+              <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                <span style="font-weight: 800; color: var(--amber);">OUTBOX EXECUTOR</span>
+                <span style="color: var(--mint);">200 OK</span>
+              </div>
+              <div class="micro-code" style="color: var(--dim); margin-top: 3px;">
+                TRANCHE: <b style="color: var(--mint);">R0 ($361.00 USD)</b><br>
+                ACTION: <b>CONFIRMED</b><br>
+                IDEMPOTENCY: <b>eee21a74-ad24...</b><br>
+                GATEWAY: <b>PayPal REST v2 (Live)</b>
+              </div>
             </div>
-            <div style="margin-top: auto; background: var(--amber-light); color: var(--amber); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;">
+
+            <div style="background: var(--amber-light); color: var(--amber); padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; text-align: center;">
               VELOCITY &amp; ZERO LOSS
             </div>
           </div>
@@ -570,7 +711,11 @@
         </div>
       </div>
 
-      <!-- SCENE 3: LIVE SIMULATION & PAYOUT (00:28 - 00:44) -->
+
+      <!-- =========================================================================
+           SCENE 3: LIVE SIMULATION & PAYOUT (00:28 - 00:44)
+           Interactive, Multi-Widget Screen Showing How It Actually Works
+           ========================================================================= -->
       <div class="scene" id="scene-3">
         <div class="pill-tag" style="background: var(--mint-light); color: var(--mint);">
           ⚡️ THE COMPLETE RETURN EXPERIENCE
@@ -680,32 +825,53 @@
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; flex: 1;">
           
           <div class="bento-card" style="border-top: 4px solid var(--mint);">
-            <div style="font-size: 10px; font-weight: 800; color: var(--mint);">THE LEDGER // REVIEW QUEUE</div>
-            <div style="font-size: 34px; font-weight: 900; color: var(--ink); margin: 6px 0;">279/279</div>
-            <div style="font-size: 12px; font-weight: 700; color: var(--mint);">Automated Tests Passed</div>
-            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
-              92%+ code coverage across state machine, custody ledgers, and jurisdiction caps.
+            <div>
+              <div style="font-size: 10px; font-weight: 800; color: var(--mint);">THE LEDGER // REVIEW QUEUE</div>
+              <div style="font-size: 32px; font-weight: 900; color: var(--ink); margin: 4px 0;">279/279</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--mint);">Automated Tests Passed</div>
+            </div>
+            <div class="micro-ui-plate micro-code" style="background: #f8fafc; color: var(--dim);">
+              suite: <b>pytest -q -rA</b><br>
+              coverage: <b style="color: var(--mint);">92%+ verified</b><br>
+              invariants: <b>INV-01 .. INV-18 (0 diff)</b>
+            </div>
+            <div style="font-size: 10px; color: var(--dim);">
+              State machine &amp; custody ledgers mathematically sealed.
             </div>
           </div>
 
           <div class="bento-card" style="border-top: 4px solid var(--coral);">
-            <div style="font-size: 10px; font-weight: 800; color: var(--coral);">FAIL-CLOSED OUTBOX</div>
-            <div style="font-size: 34px; font-weight: 900; color: var(--coral); margin: 6px 0;">0 LEAK</div>
-            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Strict Idempotency</div>
-            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
-              Every payment tranche requires an idempotency key. Network retries will never duplicate refunds.
+            <div>
+              <div style="font-size: 10px; font-weight: 800; color: var(--coral);">FAIL-CLOSED OUTBOX</div>
+              <div style="font-size: 32px; font-weight: 900; color: var(--coral); margin: 4px 0;">0 LEAK</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Strict Idempotency</div>
+            </div>
+            <div class="micro-ui-plate micro-code" style="background: #f8fafc; color: var(--dim);">
+              key: <b>Idempotency-Key required</b><br>
+              retries: <b>400 on missing key</b><br>
+              replay: <b>cached 200 responses</b>
+            </div>
+            <div style="font-size: 10px; color: var(--dim);">
+              Network retries will never trigger duplicate refunds.
             </div>
           </div>
 
           <div class="bento-card" style="border-top: 4px solid var(--indigo);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: var(--indigo);">DISPUTE PROTECTION</span>
-              <span style="font-size: 15px;">🔒</span>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--indigo);">DISPUTE PROTECTION</span>
+                <span style="font-size: 15px;">🔒</span>
+              </div>
+              <div style="font-size: 32px; font-weight: 900; color: var(--indigo); margin: 4px 0;">FREEZE</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Automated Webhook Defense</div>
             </div>
-            <div style="font-size: 34px; font-weight: 900; color: var(--indigo); margin: 6px 0;">FREEZE</div>
-            <div style="font-size: 12px; font-weight: 700; color: var(--ink);">Automated Webhook Defense</div>
-            <div style="font-size: 10px; color: var(--dim); margin-top: 3px; line-height: 1.4;">
-              Incoming PayPal disputes immediately freeze further settlement tranches (FR-75), protecting merchant cash.
+            <div class="micro-ui-plate micro-code" style="background: #f8fafc; color: var(--dim);">
+              event: <b>CUSTOMER.DISPUTE.CREATED</b><br>
+              state: <b style="color: var(--rose);">ORDER_FROZEN</b><br>
+              protection: <b>All tranches suspended (FR-75)</b>
+            </div>
+            <div style="font-size: 10px; color: var(--dim);">
+              Incoming PayPal disputes immediately freeze cash outflows.
             </div>
           </div>
 
@@ -745,9 +911,7 @@
 
     </div>
 
-    <!-- =========================================================================
-         SYNCHRONIZED ENGLISH TELEPROMPTER / VOICE-OVER HUD
-         ========================================================================= -->
+    <!-- SYNCHRONIZED ENGLISH TELEPROMPTER / VOICE-OVER HUD -->
     <div id="teleprompter-bar">
       <div class="tele-badge">
         <span class="rec-dot"></span>
@@ -1029,7 +1193,6 @@
         teleCueTime.textContent = `${formatMmSs(activeTele.start)} - ${formatMmSs(activeTele.end)}`;
         teleActiveText.textContent = `"${activeTele.text}"`;
         
-        // Pace fill percentage within current sentence
         const segmentDuration = activeTele.end - activeTele.start;
         const segmentElapsed = timeMs - activeTele.start;
         const segmentPct = Math.min(100, Math.max(0, (segmentElapsed / segmentDuration) * 100));
