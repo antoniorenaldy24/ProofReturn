@@ -228,7 +228,7 @@ npm test
 
 4. **Frontend Next.js Proxy Anti-Bypass & Hardening (RV4-01 / J-04)**:
    - `apps/demo-storefront/src/app/api/backend/[...path]/route.ts`:
-     - Strips and rejects any double-encoded characters or path traversal sequences (`%`, `..`, `.`, `/`, `\`) with 403 Forbidden.
+     - Strips and rejects any double-encoded characters or path traversal sequences with 403 Forbidden.
      - Resolves canonical target URL pathname and verifies that normalized path stays under `/v1/` and matches only allowed prefixes (`ready`, `health`, `passports`, `orders`, `returns`, `simulate`, `auth/shopper-magic-link`).
      - Blocks `ops/*`, `metrics`, and `auth/staff-token` with 403 Forbidden.
      - Removed hardcoded default key string in `route.ts`.
