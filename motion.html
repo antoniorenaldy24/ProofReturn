@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ProofReturn — 60s Motion Graphic Showcase</title>
+  <title>ProofReturn — 60s Cinematic Motion Graphic</title>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -13,24 +13,25 @@
     }
 
     :root {
-      --bg: #07080b;
-      --paper: #0d0f15;
-      --line: #1c212d;
-      --sig: #ff4800;
-      --sig-glow: rgba(255, 72, 0, 0.4);
-      --teal: #0dbda8;
-      --ok: #10b981;
-      --warn: #f59e0b;
-      --bad: #ef4444;
-      --ink: #f8fafc;
-      --dim: #94a3b8;
-      --faint: #475569;
+      --bg: #050608;
+      --sig: #ff3e00;
+      --sig-glow: rgba(255, 62, 0, 0.6);
+      --teal: #00f0ff;
+      --teal-glow: rgba(0, 240, 255, 0.4);
+      --ok: #00ff88;
+      --ok-glow: rgba(0, 255, 136, 0.5);
+      --bad: #ff2a5f;
+      --bad-glow: rgba(255, 42, 95, 0.5);
+      --gold: #ffbe3b;
+      --ink: #ffffff;
+      --dim: #8b9bb4;
+      --faint: #3b465a;
     }
 
     body {
       background: #000;
       color: var(--ink);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
       height: 100vh;
       display: flex;
@@ -39,246 +40,343 @@
       justify-content: center;
     }
 
-    /* 16:9 Viewport Stage */
-    #stage-container {
+    /* 16:9 Viewport Stage with 3D Perspective Context */
+    #viewport {
       position: relative;
       width: 100vw;
-      max-width: 177.78vh; /* 16:9 ratio */
+      max-width: 177.78vh;
       height: 56.25vw;
       max-height: 100vh;
       background: var(--bg);
       overflow: hidden;
-      box-shadow: 0 0 80px rgba(0,0,0,0.8);
-      display: flex;
-      flex-direction: column;
+      perspective: 1200px;
+      perspective-origin: 50% 50%;
+      box-shadow: 0 0 100px rgba(0, 0, 0, 0.95);
     }
 
-    /* Ambient Film Grain & Vignette */
-    .vignette {
+    /* Interactive 3D World Rig (Camera Container) */
+    #world {
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at center, transparent 40%, rgba(7, 8, 11, 0.85) 100%);
-      pointer-events: none;
-      z-index: 50;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.1s linear;
+      will-change: transform;
     }
 
-    .grid-bg {
+    /* Background Dynamic Canvas (Stars & Grid Warp) */
+    #bg-canvas {
       position: absolute;
       inset: 0;
-      background-image: 
-        linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
       z-index: 1;
     }
 
-    /* Canvas Stage Area */
-    #canvas-wrap {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      z-index: 10;
-    }
-
-    .scene {
+    /* Cinematic Film Overlays */
+    .vignette {
       position: absolute;
       inset: 0;
-      padding: 5% 7%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      opacity: 0;
+      background: radial-gradient(circle at center, transparent 35%, rgba(5, 6, 8, 0.9) 100%);
       pointer-events: none;
-      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-      transform: scale(0.97) translateY(12px);
+      z-index: 50;
     }
 
-    .scene.active {
-      opacity: 1;
-      pointer-events: auto;
-      transform: scale(1) translateY(0);
-    }
-
-    /* Top Brand Watermark */
-    .top-bar {
+    .anamorphic-flare {
       position: absolute;
-      top: 24px;
-      left: 32px;
-      right: 32px;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,62,0,0.8) 50%, transparent 100%);
+      filter: blur(4px);
+      opacity: 0;
+      transform: translateY(-50%) scaleX(0.2);
+      transition: opacity 0.6s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+      z-index: 52;
+    }
+
+    .anamorphic-flare.active {
+      opacity: 0.8;
+      transform: translateY(-50%) scaleX(1);
+    }
+
+    /* Top Cinematic HUD Strip */
+    .hud-bar {
+      position: absolute;
+      top: 28px;
+      left: 40px;
+      right: 40px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       z-index: 60;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 11px;
-      letter-spacing: 0.2em;
+      letter-spacing: 0.25em;
       text-transform: uppercase;
       color: var(--dim);
+      pointer-events: none;
     }
 
     .brand-mark {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-weight: 700;
+      gap: 12px;
+      font-weight: 800;
       color: #fff;
     }
 
-    .brand-dot {
-      width: 8px;
-      height: 8px;
+    .brand-prism {
+      width: 10px;
+      height: 10px;
       background: var(--sig);
-      border-radius: 2px;
-      box-shadow: 0 0 12px var(--sig);
-      animation: pulse 2s infinite;
+      box-shadow: 0 0 16px var(--sig), 0 0 32px var(--sig);
+      transform: rotate(45deg);
+      animation: prismPulse 2.5s infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
+    @keyframes prismPulse {
+      0%, 100% { transform: rotate(45deg) scale(1); filter: drop-shadow(0 0 10px var(--sig)); }
+      50% { transform: rotate(225deg) scale(1.15); filter: drop-shadow(0 0 25px var(--sig)); }
     }
 
-    /* Kinetic Typography */
+    /* Scene Architecture in 3D Space */
+    .scene-layer {
+      position: absolute;
+      inset: 0;
+      padding: 6% 8%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transform-style: preserve-3d;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      z-index: 10;
+    }
+
+    .scene-layer.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Satisfying Kinetic Lettering */
+    .word-mask {
+      display: inline-block;
+      overflow: hidden;
+      vertical-align: bottom;
+      padding-bottom: 0.08em;
+    }
+
+    .word-char {
+      display: inline-block;
+      transform: translateY(120%) rotateX(-35deg);
+      opacity: 0;
+      transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+      will-change: transform, opacity;
+    }
+
+    .scene-layer.active .word-char {
+      transform: translateY(0) rotateX(0deg);
+      opacity: 1;
+    }
+
     .k-tag {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
+      gap: 8px;
+      padding: 5px 14px;
       border-radius: 999px;
       font-family: ui-monospace, monospace;
       font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       width: fit-content;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
 
-    .k-title {
-      font-size: clamp(28px, 4.2vw, 54px);
-      font-weight: 800;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
+    .k-display {
+      font-size: clamp(34px, 5.2vw, 70px);
+      font-weight: 900;
+      line-height: 1.04;
+      letter-spacing: -0.04em;
       color: #fff;
-      max-width: 18ch;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+      text-shadow: 0 10px 40px rgba(0,0,0,0.8);
     }
 
-    .k-desc {
-      font-size: clamp(14px, 1.8vw, 22px);
+    .k-editorial {
+      font-family: "Didot", "Playfair Display", "Georgia", serif;
+      font-style: italic;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .k-sub {
+      font-size: clamp(15px, 1.9vw, 24px);
       color: var(--dim);
-      max-width: 38ch;
-      line-height: 1.45;
+      max-width: 44ch;
+      line-height: 1.5;
       font-weight: 400;
     }
 
-    .highlight-sig { color: var(--sig); }
-    .highlight-ok { color: var(--ok); }
-    .highlight-teal { color: var(--teal); }
-    .highlight-bad { color: var(--bad); }
-
-    /* Scene Specific Component Cards */
-    .card-grid {
+    /* Kinetic 3D Cards with Holographic Glass */
+    .deck-3d {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-top: 28px;
+      gap: 20px;
+      margin-top: 32px;
       width: 100%;
+      transform-style: preserve-3d;
     }
 
-    .card {
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px 16px;
+    .card-3d {
+      background: linear-gradient(135deg, rgba(20, 24, 34, 0.75) 0%, rgba(10, 12, 18, 0.85) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px 20px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
       position: relative;
       overflow: hidden;
-      transition: all 0.4s ease;
+      backdrop-filter: blur(16px);
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateZ(0);
+      box-shadow: 0 16px 36px rgba(0,0,0,0.6);
     }
 
-    .card.highlight {
+    .card-3d.highlight {
       border-color: var(--sig);
-      box-shadow: 0 0 24px rgba(255, 72, 0, 0.2);
-      transform: translateY(-4px);
+      box-shadow: 0 0 40px var(--sig-glow), 0 20px 40px rgba(0,0,0,0.8);
+      transform: translateZ(40px) translateY(-8px) scale(1.04);
+      background: linear-gradient(135deg, rgba(30, 24, 28, 0.9) 0%, rgba(20, 14, 18, 0.95) 100%);
     }
 
-    .card-num {
-      font-family: ui-monospace, monospace;
-      font-size: 11px;
-      color: var(--faint);
+    .card-laser {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--sig), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
     }
 
-    .card-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: #fff;
+    .card-3d.highlight .card-laser {
+      opacity: 1;
+      animation: laserSweep 2s infinite ease-in-out;
     }
 
-    .card-sub {
-      font-size: 12px;
-      color: var(--dim);
-      line-height: 1.35;
+    @keyframes laserSweep {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(220px); }
     }
 
-    /* Live Animated Metric Counter */
-    .big-stat {
-      font-size: clamp(52px, 8.5vw, 110px);
+    /* Giant Kinetic Stat Counter */
+    .stat-mega {
+      font-size: clamp(64px, 11vw, 150px);
       font-weight: 900;
-      font-family: ui-monospace, monospace;
-      letter-spacing: -0.04em;
-      line-height: 0.95;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      letter-spacing: -0.05em;
+      line-height: 0.9;
       color: #fff;
       display: flex;
       align-items: baseline;
-      gap: 10px;
-      margin: 12px 0 16px;
+      gap: 16px;
+      margin: 16px 0 24px;
+      text-shadow: 0 0 60px rgba(255, 62, 0, 0.3);
     }
 
-    /* Curve Graphic Simulator */
-    .curve-box {
-      background: #090b10;
-      border: 1px solid #1f2637;
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 20px;
+    /* Holographic Digital Passport Morph (Scene 2) */
+    .passport-pod {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 40px;
+      margin-top: 24px;
     }
 
-    .grade-badge {
-      display: inline-flex;
+    .passport-chip {
+      width: 320px;
+      height: 200px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(30, 35, 48, 0.8) 0%, rgba(12, 15, 22, 0.95) 100%);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      box-shadow: 0 0 50px rgba(0, 240, 255, 0.2), inset 0 0 30px rgba(0, 240, 255, 0.1);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transform: rotateY(-14deg) rotateX(8deg);
+      transition: transform 0.6s ease;
+    }
+
+    .passport-chip:hover {
+      transform: rotateY(0deg) rotateX(0deg) scale(1.05);
+    }
+
+    /* Live Animated SVG Waveform / CIRC Curve (Scene 3) */
+    .circ-chart-svg {
+      width: 100%;
+      height: 120px;
+      overflow: visible;
+    }
+
+    .curve-path {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      transition: stroke-dashoffset 2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .scene-layer.active .curve-path {
+      stroke-dashoffset: 0;
+    }
+
+    /* HUD Metrics Rings (Scene 4) */
+    .hud-triad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 28px;
+    }
+
+    .hud-gauge {
+      background: rgba(14, 18, 26, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      font-weight: 800;
-      font-size: 20px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5);
     }
 
-    /* Playback Controls (Sticky Bottom) */
+    /* Bottom Timeline Controls Bar */
     #controls {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
       height: 64px;
-      background: rgba(7, 8, 11, 0.88);
-      backdrop-filter: blur(12px);
-      border-top: 1px solid var(--line);
+      background: rgba(5, 6, 8, 0.92);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255,255,255,0.08);
       display: flex;
       align-items: center;
-      padding: 0 24px;
-      gap: 16px;
+      padding: 0 28px;
+      gap: 18px;
       z-index: 70;
       transition: opacity 0.3s;
     }
@@ -289,8 +387,8 @@
     }
 
     .play-btn {
-      width: 38px;
-      height: 38px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
       background: var(--sig);
       border: none;
@@ -299,28 +397,28 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 15px;
+      font-size: 16px;
+      box-shadow: 0 0 24px var(--sig-glow);
       transition: transform 0.2s, background 0.2s;
     }
 
     .play-btn:hover {
-      transform: scale(1.08);
-      background: #ff5e1a;
+      transform: scale(1.1);
+      background: #ff551f;
     }
 
     .timeline-wrap {
       flex: 1;
-      height: 28px;
+      height: 32px;
       display: flex;
       align-items: center;
-      position: relative;
       cursor: pointer;
     }
 
     .timeline-rail {
       width: 100%;
       height: 6px;
-      background: #1e2433;
+      background: #181d28;
       border-radius: 3px;
       position: relative;
       overflow: hidden;
@@ -329,225 +427,246 @@
     .timeline-progress {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #ff4800, #ff8c00);
+      background: linear-gradient(90deg, #ff3e00, #ff9500, #00f0ff);
       border-radius: 3px;
+      box-shadow: 0 0 12px var(--sig);
     }
 
     .time-readout {
       font-family: ui-monospace, monospace;
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 700;
       color: var(--dim);
-      min-width: 88px;
+      min-width: 95px;
       text-align: right;
     }
 
     .btn-secondary {
-      background: #141722;
-      border: 1px solid #242c3d;
+      background: #131722;
+      border: 1px solid #283347;
       color: var(--dim);
-      padding: 6px 12px;
-      border-radius: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
       font-size: 11px;
       font-family: ui-monospace, monospace;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       transition: all 0.2s;
     }
 
     .btn-secondary:hover {
       color: #fff;
-      border-color: var(--dim);
+      border-color: var(--sig);
+      box-shadow: 0 0 12px rgba(255, 62, 0, 0.3);
     }
   </style>
 </head>
 <body>
 
-  <div id="stage-container">
-    <div class="grid-bg"></div>
+  <div id="viewport">
+    <canvas id="bg-canvas"></canvas>
     <div class="vignette"></div>
+    <div class="anamorphic-flare" id="flare"></div>
 
-    <!-- Top Watermark -->
-    <div class="top-bar">
+    <!-- Top HUD Strip -->
+    <div class="hud-bar">
       <div class="brand-mark">
-        <div class="brand-dot"></div>
-        <span>ProofReturn // Motion System</span>
+        <div class="brand-prism"></div>
+        <span>PROOFRETURN // 60s MOTION RIG</span>
       </div>
-      <div id="scene-counter">SCENE 1 / 5 · 00:00</div>
+      <div id="scene-tag">ACT 1 / 5 · 00:00</div>
     </div>
 
-    <!-- Animation Scenes -->
-    <div id="canvas-wrap">
+    <!-- 3D WORLD CONTAINER (Camera moves this layer in 3D) -->
+    <div id="world">
 
-      <!-- SCENE 1: The $800B Problem (0s - 12s) -->
-      <div class="scene" id="scene-1">
-        <div class="k-tag" style="border-color: rgba(239,68,68,0.4); color: #ef4444; background: rgba(239,68,68,0.08);">
-          ● THE E-COMMERCE CRISIS
+      <!-- SCENE 1: THE CRISIS ($800B SLAM) (0s - 12s) -->
+      <div class="scene-layer" id="scene-1">
+        <div class="k-tag" style="border: 1px solid rgba(255, 42, 95, 0.4); color: var(--bad); background: rgba(255, 42, 95, 0.08);">
+          ● GLOBAL COMMERCE VULNERABILITY
         </div>
-        <div class="k-title">
-          Returns are an <span class="highlight-bad">$800 Billion</span> Broken Industry.
+        <div class="k-display">
+          Returns are an <span style="color: var(--bad);" class="k-editorial">$800 Billion</span> Broken Industry.
         </div>
-        <div class="big-stat" style="color: #ef4444;">
-          <span id="stat-counter">$0B</span>
-          <span style="font-size: 24px; color: var(--dim); font-weight: 500;">Annual Losses</span>
+        <div class="stat-mega" style="color: var(--bad);">
+          <span id="counter-800">$0B</span>
+          <span style="font-size: 26px; color: var(--dim); font-weight: 500; letter-spacing: 0;">Annual Merchant Bleed</span>
         </div>
-        <div class="k-desc">
-          Honest shoppers wait <b style="color:#fff;">14 days</b> for refunds. 
-          Meanwhile, merchants lose billions to wardrobing, empty box scams, and counterfeit swaps.
+        <div class="k-sub">
+          Honest shoppers wait <b style="color: #fff;">14 days</b> in refund limbo. 
+          Meanwhile, merchants hemorrhage billions to wardrobing and empty-box scams.
         </div>
       </div>
 
-      <!-- SCENE 2: The Breakthrough — ProofReturn Protocol (12s - 24s) -->
-      <div class="scene" id="scene-2">
-        <div class="k-tag" style="border-color: rgba(255,72,0,0.4); color: var(--sig); background: rgba(255,72,0,0.08);">
-          ★ INTRODUCING PROOFRETURN
+      <!-- SCENE 2: THE CRYPTOGRAPHIC BREAKTHROUGH (12s - 24s) -->
+      <div class="scene-layer" id="scene-2">
+        <div class="k-tag" style="border: 1px solid rgba(255, 62, 0, 0.4); color: var(--sig); background: rgba(255, 62, 0, 0.08);">
+          ★ ARCHITECTURAL PARADIGM SHIFT
         </div>
-        <div class="k-title">
-          Cryptographic Trust Meets <span class="highlight-sig">Algorithmic Restocking</span>.
+        <div class="k-display">
+          Cryptographic Integrity Meets <span style="color: var(--sig);" class="k-editorial">Deterministic Law</span>.
         </div>
-        <div class="k-desc" style="margin-bottom: 20px;">
-          ProofReturn replaces guesswork with tamper-evident digital passports and mathematically guaranteed refund curves.
-        </div>
-        <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
-          <div class="card">
-            <span class="card-num">01 / INTEGRITY</span>
-            <span class="card-title">Ed25519 Passports</span>
-            <span class="card-sub">Hardware &amp; tamper-proof genesis seal minted at packing dock.</span>
+        <div class="passport-pod">
+          <!-- 3D Holographic Passport Card -->
+          <div class="passport-chip" id="passport-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: ui-monospace; font-size: 10px; color: var(--teal); letter-spacing: 0.15em;">ED25519 · GENESIS SEAL</span>
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px var(--teal);"></span>
+            </div>
+            <div>
+              <div style="font-size: 14px; font-weight: 800; color: #fff;">SONY WH-1000XM5</div>
+              <div style="font-family: ui-monospace; font-size: 9px; color: var(--dim); margin-top: 4px;">SN: SN-DEMO-XM5-001 · 250.0g TARE</div>
+            </div>
+            <div style="font-family: ui-monospace; font-size: 9px; color: var(--teal); word-break: break-all; opacity: 0.8;">
+              SIG: 3ea4d6ef259b7fb85f40f0980cf7bc51...
+            </div>
           </div>
-          <div class="card highlight">
-            <span class="card-num">02 / CERTAINTY</span>
-            <span class="card-title">CIRC Engine</span>
-            <span class="card-sub">Condition-indexed refund curve legally capped by US/EU statutes.</span>
-          </div>
-          <div class="card">
-            <span class="card-num">03 / VELOCITY</span>
-            <span class="card-title">Multi-Tranche Payout</span>
-            <span class="card-sub">Instant R0 tranche paid at drop-off; automated outbox settlement.</span>
+
+          <div style="flex: 1;">
+            <div class="k-sub" style="margin-bottom: 20px;">
+              ProofReturn replaces friction with physical-digital cryptographic bonding:
+            </div>
+            <div style="display: flex; gap: 16px;">
+              <div style="padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 13px;">
+                <b style="color: #fff;">1. Digital Passport (DPP)</b><br><span style="color: var(--dim); font-size: 11px;">Hardware tamper seal</span>
+              </div>
+              <div style="padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,62,0,0.3); border-radius: 8px; font-size: 13px;">
+                <b style="color: var(--sig);">2. CIRC Refund Engine</b><br><span style="color: var(--dim); font-size: 11px;">Statutory curve caps</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- SCENE 3: The 4 Personas Live Journey (24s - 44s) -->
-      <div class="scene" id="scene-3">
-        <div class="k-tag" style="border-color: rgba(13,189,168,0.4); color: var(--teal); background: rgba(13,189,168,0.08);">
+      <!-- SCENE 3: THE 4-ACT CLOSED MONEY LOOP (24s - 44s) -->
+      <div class="scene-layer" id="scene-3">
+        <div class="k-tag" style="border: 1px solid rgba(0, 240, 255, 0.4); color: var(--teal); background: rgba(0, 240, 255, 0.08);">
           ↻ THE COMPLETE 4-ACT LOOP
         </div>
-        <div class="k-title" id="persona-title">
-          From Packing Station to <span class="highlight-teal">Instant Money Loop</span>.
+        <div class="k-display">
+          From Packing Station to <span style="color: var(--ok);" class="k-editorial">Instant Payout</span>.
         </div>
 
-        <div class="card-grid" id="persona-cards">
-          <div class="card" id="card-p1">
-            <span class="card-num">ACT 1 · PACKING</span>
-            <span class="card-title">The Mint</span>
-            <span class="card-sub">Digital Product Passport minted with Ed25519 signature &amp; weight.</span>
+        <div class="deck-3d">
+          <div class="card-3d" id="deck-p1">
+            <div class="card-laser"></div>
+            <span style="font-family: ui-monospace; font-size: 10px; color: var(--teal);">ACT 1 · THE MINT</span>
+            <span style="font-size: 16px; font-weight: 800; color: #fff;">Packing Station</span>
+            <span style="font-size: 12px; color: var(--dim);">Digital passport &amp; Ed25519 signature sealed at warehouse dock.</span>
           </div>
-          <div class="card" id="card-p2">
-            <span class="card-num">ACT 2 · STOREFRONT</span>
-            <span class="card-title">The Note</span>
-            <span class="card-sub">Transparent CIRC curve displayed to buyer before checkout.</span>
+          <div class="card-3d" id="deck-p2">
+            <div class="card-laser"></div>
+            <span style="font-family: ui-monospace; font-size: 10px; color: var(--sig);">ACT 2 · THE NOTE</span>
+            <span style="font-size: 16px; font-weight: 800; color: #fff;">Storefront CIRC</span>
+            <span style="font-size: 12px; color: var(--dim);">Transparent condition curve promise displayed before checkout ($380 MSRP).</span>
           </div>
-          <div class="card" id="card-p3">
-            <span class="card-num">ACT 3 · SHOPPER</span>
-            <span class="card-title">The Claim</span>
-            <span class="card-sub">Photo proof + Dynamic Nonce challenge unlocks fast-lane R0 refund.</span>
+          <div class="card-3d" id="deck-p3">
+            <div class="card-laser"></div>
+            <span style="font-family: ui-monospace; font-size: 10px; color: var(--ok);">ACT 3 · THE CLAIM</span>
+            <span style="font-size: 16px; font-weight: 800; color: #fff;">Shopper Fast-Lane</span>
+            <span style="font-size: 12px; color: var(--dim);">Photo + Dynamic Nonce challenge unlocks instant R0 refund ($361.00).</span>
           </div>
-          <div class="card" id="card-p4">
-            <span class="card-num">ACT 4 · MERCHANT</span>
-            <span class="card-title">The Ledger</span>
-            <span class="card-sub">Automated outbox settlement, dispute freeze, and ROI dashboard.</span>
+          <div class="card-3d" id="deck-p4">
+            <div class="card-laser"></div>
+            <span style="font-family: ui-monospace; font-size: 10px; color: var(--gold);">ACT 4 · THE LEDGER</span>
+            <span style="font-size: 16px; font-weight: 800; color: #fff;">Merchant Console</span>
+            <span style="font-size: 12px; color: var(--dim);">Automated outbox settlement, dispute freeze, and ROI capital dashboard.</span>
           </div>
         </div>
 
-        <!-- Dynamic Live Demo Feed Box -->
-        <div class="curve-box" id="demo-feed-box">
-          <div class="grade-badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.4);">
-            B
-          </div>
-          <div style="flex:1;">
-            <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px;" id="feed-headline">
-              Instant Payout Triggered: $361.00 USD
+        <!-- Dynamic Live SVG Curve & Refund Event Banner -->
+        <div style="margin-top: 24px; padding: 18px 24px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="width: 48px; height: 48px; border-radius: 10px; background: rgba(0,255,136,0.2); border: 1px solid var(--ok); color: var(--ok); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px;">
+              B
             </div>
-            <div style="font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace;" id="feed-sub">
-              Grade B Verified (95% Value on $380 MSRP) · Holdback Escrow: $15.00 · Anti-Spoof Nonce Verified
+            <div>
+              <div style="font-size: 15px; font-weight: 800; color: #fff;" id="payout-banner-text">
+                Instant Tranche R0 Dispatched: $361.00 USD
+              </div>
+              <div style="font-family: ui-monospace; font-size: 11px; color: var(--dim);">
+                Condition B (95% Value on $380 MSRP) · Holdback Escrow: $15.00 · Anti-Spoof Nonce Validated
+              </div>
             </div>
           </div>
-          <div style="text-align: right; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ok);">
-            ● FAST-LANE ACTIVE
+          <div style="font-family: ui-monospace; font-weight: 800; font-size: 12px; color: var(--ok); display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 12px var(--ok);"></span>
+            FUNDS IN BUYER WALLET (< 10s)
           </div>
         </div>
       </div>
 
-      <!-- SCENE 4: Technical Moat & Security (44s - 54s) -->
-      <div class="scene" id="scene-4">
-        <div class="k-tag" style="border-color: rgba(16,185,129,0.4); color: var(--ok); background: rgba(16,185,129,0.08);">
-          🛡 PRODUCTION-GRADE SECURITY
+      <!-- SCENE 4: PROVEN INTEGRITY & SECURITY (44s - 54s) -->
+      <div class="scene-layer" id="scene-4">
+        <div class="k-tag" style="border: 1px solid rgba(0, 255, 136, 0.4); color: var(--ok); background: rgba(0, 255, 136, 0.08);">
+          🛡 INVARIANT INTEGRITY & AUDIT PROOF
         </div>
-        <div class="k-title">
-          Deterministic Math. <span class="highlight-ok">Zero AI Hallucinations</span>.
+        <div class="k-display">
+          Deterministic Math. <span style="color: var(--ok);" class="k-editorial">Zero AI Hallucinations</span>.
         </div>
-        <div class="k-desc">
-          AI acts purely as an Advisory Vision Grader. Invariant INV-05 enforces that financial custody is strictly governed by fail-closed code and mathematical policy.
+        <div class="k-sub">
+          AI serves strictly as an Advisory Vision Grader (INV-05). Custody and payout decisions are 100% hard-coded, fail-closed, and verifiable.
         </div>
 
-        <div class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 24px;">
-          <div class="card" style="border-color: rgba(16,185,129,0.3);">
-            <span class="card-num">VERIFICATION</span>
-            <div class="big-stat" style="font-size: 42px; margin: 4px 0; color: var(--ok);">279/279</div>
-            <span class="card-sub">Automated Pytest Suite Passed with 92%+ Test Coverage.</span>
+        <div class="hud-triad">
+          <div class="hud-gauge" style="border-color: rgba(0, 255, 136, 0.3);">
+            <div style="font-family: ui-monospace; font-size: 11px; color: var(--ok); letter-spacing: 0.15em;">REGRESSION PROOF</div>
+            <div style="font-size: 56px; font-weight: 900; color: #fff; font-family: ui-monospace; margin: 8px 0;">279/279</div>
+            <div style="font-size: 12px; color: var(--dim);">Automated Tests Passed · 92%+ Backend Coverage</div>
           </div>
-          <div class="card">
-            <span class="card-num">INTEGRITY</span>
-            <div class="big-stat" style="font-size: 42px; margin: 4px 0; color: #fff;">0 FAIL</div>
-            <span class="card-sub">100% Fail-Closed Outbox &amp; Dispute-Freeze Protection.</span>
+          <div class="hud-gauge">
+            <div style="font-family: ui-monospace; font-size: 11px; color: var(--teal); letter-spacing: 0.15em;">OUTBOX PATTERN</div>
+            <div style="font-size: 56px; font-weight: 900; color: #fff; font-family: ui-monospace; margin: 8px 0;">0 LEAK</div>
+            <div style="font-size: 12px; color: var(--dim);">100% Fail-Closed Outbox &amp; Dispute-Freeze Protection</div>
           </div>
-          <div class="card">
-            <span class="card-num">DISPUTE PROTECTION</span>
-            <div class="big-stat" style="font-size: 42px; margin: 4px 0; color: var(--sig);">&lt; 10s</div>
-            <span class="card-sub">Instant R0 tranche execution vs 14-day standard industry wait.</span>
+          <div class="hud-gauge">
+            <div style="font-family: ui-monospace; font-size: 11px; color: var(--sig); letter-spacing: 0.15em;">SETTLEMENT VELOCITY</div>
+            <div style="font-size: 56px; font-weight: 900; color: #fff; font-family: ui-monospace; margin: 8px 0;">&lt; 10s</div>
+            <div style="font-size: 12px; color: var(--dim);">Instant R0 Tranche vs 14-Day Industry Wait</div>
           </div>
         </div>
       </div>
 
-      <!-- SCENE 5: Final Call to Action & Conclusion (54s - 60s) -->
-      <div class="scene" id="scene-5" style="align-items: center; text-align: center;">
-        <div class="brand-dot" style="width: 24px; height: 24px; border-radius: 6px; margin-bottom: 20px;"></div>
-        <div class="k-title" style="font-size: clamp(38px, 6vw, 76px); max-width: 15ch; margin-bottom: 12px;">
+      <!-- SCENE 5: THE MONOLITH FINALE (54s - 60s) -->
+      <div class="scene-layer" id="scene-5" style="align-items: center; text-align: center;">
+        <div class="brand-prism" style="width: 28px; height: 28px; margin-bottom: 24px;"></div>
+        <div class="k-display" style="font-size: clamp(52px, 8vw, 110px); letter-spacing: -0.05em; margin-bottom: 16px;">
           ProofReturn
         </div>
-        <div class="k-desc" style="max-width: 30ch; font-size: 24px; color: #fff; font-weight: 600; margin-bottom: 24px;">
+        <div style="font-size: clamp(20px, 2.5vw, 36px); font-weight: 600; color: #fff; line-height: 1.3; max-width: 25ch; margin-bottom: 28px;">
           Instant Trust for Shoppers.<br>
-          <span class="highlight-sig">Zero Fraud for Merchants.</span>
+          <span style="color: var(--sig);" class="k-editorial">Zero Fraud for Merchants.</span>
         </div>
-        <div class="k-tag" style="border-color: rgba(255,255,255,0.2); font-size: 13px; color: var(--dim); padding: 8px 24px;">
+        <div class="k-tag" style="border: 1px solid rgba(255,255,255,0.25); font-size: 13px; color: var(--dim); padding: 10px 32px;">
           REVOLUTIONIZING THE $800B RETURN ECONOMY
         </div>
       </div>
 
     </div>
 
-    <!-- Bottom Playback Controls Bar -->
+    <!-- Bottom Timeline Player Controls -->
     <div id="controls">
-      <button class="play-btn" id="btn-play" title="Play / Pause">▶</button>
+      <button class="play-btn" id="btn-play" title="Play / Pause (Space)">▶</button>
       <div class="timeline-wrap" id="timeline">
         <div class="timeline-rail">
           <div class="timeline-progress" id="progress-bar"></div>
         </div>
       </div>
       <div class="time-readout" id="time-display">00:00 / 01:00</div>
-      <button class="btn-secondary" id="btn-sound" title="Toggle Synthesized Audio">
+      <button class="btn-secondary" id="btn-sound" title="Toggle Sound (Web Audio Synthesizer)">
         <span id="sound-icon">🔊</span> AUDIO ON
       </button>
-      <button class="btn-secondary" id="btn-fullscreen" title="Full Screen (F11)">
-        ⛶ FULLSCREEN
+      <button class="btn-secondary" id="btn-fullscreen" title="Full Screen (F)">
+        ⛶ FULLSCREEN (F)
       </button>
     </div>
   </div>
 
   <script>
-    // --- AUDIO SYNTHESIZER (Pure Web Audio API - Zero External Files) ---
-    const AudioEngine = {
+    // --- 1. SOUND DESIGN (Cinematic Sub-Bass, Digital Riser, Holographic Scanner) ---
+    const SoundFX = {
       ctx: null,
       enabled: true,
       init() {
@@ -556,130 +675,212 @@
           this.ctx = new AudioContext();
         }
       },
-      beep(freq = 440, type = "sine", duration = 0.1, gainVal = 0.1) {
+      bassDrop() {
         if (!this.enabled || !this.ctx) return;
         try {
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
-          osc.type = type;
-          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(32, this.ctx.currentTime + 0.8);
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.85);
           osc.connect(gain);
           gain.connect(this.ctx.destination);
           osc.start();
-          osc.stop(this.ctx.currentTime + duration);
+          osc.stop(this.ctx.currentTime + 0.85);
         } catch(e) {}
       },
-      sfxScene() {
-        this.beep(220, "triangle", 0.15, 0.08);
-        setTimeout(() => this.beep(440, "sine", 0.25, 0.06), 80);
+      digitalPing(freq = 880, dur = 0.15) {
+        if (!this.enabled || !this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + dur);
+        } catch(e) {}
       },
-      sfxSuccess() {
-        this.beep(523.25, "sine", 0.1, 0.1); // C5
-        setTimeout(() => this.beep(659.25, "sine", 0.1, 0.1), 100); // E5
-        setTimeout(() => this.beep(783.99, "sine", 0.3, 0.12), 200); // G5
-      },
-      sfxTick() {
-        this.beep(880, "square", 0.03, 0.02);
+      payoutChime() {
+        if (!this.enabled || !this.ctx) return;
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+          setTimeout(() => this.digitalPing(freq, 0.4), idx * 75);
+        });
       }
     };
 
-    // --- MOTION TIMELINE ENGINE (60 Seconds Duration) ---
+    // --- 2. 3D PARTICLE STARFIELD & GRID WARP (Canvas Background) ---
+    const canvas = document.getElementById("bg-canvas");
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    const NUM_PARTICLES = 120;
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      particles.push({
+        x: (Math.random() - 0.5) * 2000,
+        y: (Math.random() - 0.5) * 1200,
+        z: Math.random() * 1000 + 100,
+        size: Math.random() * 2 + 0.8,
+        color: Math.random() > 0.85 ? "#ff3e00" : (Math.random() > 0.7 ? "#00f0ff" : "#ffffff")
+      });
+    }
+
+    function drawParticles(camZ, camRotX, camRotY) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      for (let p of particles) {
+        let pz = p.z - camZ;
+        if (pz <= 10) pz += 1000;
+        const scale = 500 / pz;
+        const px = cx + (p.x + camRotY * 300) * scale;
+        const py = cy + (p.y - camRotX * 300) * scale;
+
+        if (px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
+          ctx.beginPath();
+          ctx.arc(px, py, p.size * scale, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = Math.min(1, Math.max(0.1, 1 - pz / 1000));
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // --- 3. 3D CAMERA DIRECTOR RIG & TIMELINE (60 Seconds) ---
     const TOTAL_DURATION_MS = 60000;
     let currentTimeMs = 0;
     let isPlaying = false;
-    let lastTickTime = null;
+    let lastTimestamp = null;
     let currentSceneIdx = -1;
 
-    const scenes = [
-      { id: "scene-1", start: 0, end: 12000, name: "THE CRISIS" },
-      { id: "scene-2", start: 12000, end: 24000, name: "THE PROTOCOL" },
-      { id: "scene-3", start: 24000, end: 44000, name: "4-ACT JOURNEY" },
-      { id: "scene-4", start: 44000, end: 54000, name: "PROVEN INTEGRITY" },
-      { id: "scene-5", start: 54000, end: 60000, name: "CONCLUSION" }
+    // 3D Camera Coordinate Keyframes
+    const SCENE_KEYFRAMES = [
+      // Scene 1: 0s - 12s (The Crisis) - Camera pushes in, slight left tilt
+      { start: 0, end: 12000, cam: { x: 0, y: 0, z: 120, rotX: 3, rotY: -3, rotZ: -0.5 }, name: "THE $800B CRISIS" },
+      // Scene 2: 12s - 24s (The Protocol) - Camera dollies right, rotates facing holographic card
+      { start: 12000, end: 24000, cam: { x: -80, y: 20, z: 80, rotX: -2, rotY: 6, rotZ: 0.5 }, name: "CRYPTOGRAPHIC PROTOCOL" },
+      // Scene 3: 24s - 44s (4-Act Loop) - Camera sweeps across the 4 cards
+      { start: 24000, end: 44000, cam: { x: 0, y: -20, z: 40, rotX: 4, rotY: 0, rotZ: 0 }, name: "4-ACT MONEY LOOP" },
+      // Scene 4: 44s - 54s (Security Proof) - High-angle inspection perspective
+      { start: 44000, end: 54000, cam: { x: 0, y: 40, z: 100, rotX: -5, rotY: -2, rotZ: 0 }, name: "INVARIANT INTEGRITY" },
+      // Scene 5: 54s - 60s (The Monolith Finale) - Camera pulls back into infinity
+      { start: 54000, end: 60000, cam: { x: 0, y: 0, z: -40, rotX: 0, rotY: 0, rotZ: 0 }, name: "THE NEW STANDARD" }
     ];
 
-    // DOM Elements
-    const btnPlay = document.getElementById("btn-play");
+    const world = document.getElementById("world");
+    const flare = document.getElementById("flare");
+    const sceneTag = document.getElementById("scene-tag");
     const progressBar = document.getElementById("progress-bar");
     const timeDisplay = document.getElementById("time-display");
-    const sceneCounter = document.getElementById("scene-counter");
+    const btnPlay = document.getElementById("btn-play");
     const timeline = document.getElementById("timeline");
     const btnSound = document.getElementById("btn-sound");
-    const soundIcon = document.getElementById("sound-icon");
     const btnFullscreen = document.getElementById("btn-fullscreen");
 
-    // Format mm:ss
-    function formatTime(ms) {
-      const s = Math.floor(ms / 1000);
-      const m = Math.floor(s / 60);
-      const remS = s % 60;
-      return `${String(m).padStart(2, '0')}:${String(remS).padStart(2, '0')}`;
-    }
+    function render3D(timeMs) {
+      let activeIdx = SCENE_KEYFRAMES.findIndex(s => timeMs >= s.start && timeMs < s.end);
+      if (activeIdx === -1 && timeMs >= TOTAL_DURATION_MS) activeIdx = SCENE_KEYFRAMES.length - 1;
 
-    // Update scenes & kinetic elements
-    function renderFrame(timeMs) {
-      // 1. Scene Switching
-      let activeIdx = scenes.findIndex(s => timeMs >= s.start && timeMs < s.end);
-      if (activeIdx === -1 && timeMs >= TOTAL_DURATION_MS) activeIdx = scenes.length - 1;
-
+      // 1. Scene Switch & Bass Drop Trigger
       if (activeIdx !== currentSceneIdx && activeIdx !== -1) {
         currentSceneIdx = activeIdx;
-        scenes.forEach((sc, idx) => {
-          const el = document.getElementById(sc.id);
+        SCENE_KEYFRAMES.forEach((sc, idx) => {
+          const el = document.getElementById(`scene-${idx + 1}`);
           if (idx === currentSceneIdx) {
             el.classList.add("active");
           } else {
             el.classList.remove("active");
           }
         });
-        sceneCounter.textContent = `SCENE ${currentSceneIdx + 1} / 5 · ${scenes[currentSceneIdx].name}`;
-        AudioEngine.sfxScene();
+
+        sceneTag.textContent = `ACT ${currentSceneIdx + 1} / 5 · ${SCENE_KEYFRAMES[currentSceneIdx].name}`;
+        SoundFX.bassDrop();
+
+        // Anamorphic lens flare flash
+        flare.classList.add("active");
+        setTimeout(() => flare.classList.remove("active"), 500);
       }
 
-      // 2. Timeline Progress Bar
+      // 2. Interpolate 3D Camera Movement
+      const currentKf = SCENE_KEYFRAMES[currentSceneIdx];
+      const sceneProgress = (timeMs - currentKf.start) / (currentKf.end - currentKf.start);
+      
+      // Continuous subtle cinematic breathing/drift
+      const driftZ = Math.sin(timeMs / 2000) * 15;
+      const driftRotY = Math.cos(timeMs / 2500) * 1.5;
+
+      const camX = currentKf.cam.x + (sceneProgress * 30);
+      const camY = currentKf.cam.y + (sceneProgress * -10);
+      const camZ = currentKf.cam.z + driftZ + (sceneProgress * -50);
+      const rotX = currentKf.cam.rotX;
+      const rotY = currentKf.cam.rotY + driftRotY;
+      const rotZ = currentKf.cam.rotZ;
+
+      // Apply 3D Matrix to World Rig
+      world.style.transform = `translate3d(${camX}px, ${camY}px, ${camZ}px) rotateX(${rotX}deg) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`;
+
+      // Draw Starfield particles reacting to camera
+      drawParticles(timeMs * 0.15, rotX, rotY);
+
+      // 3. Update Timeline
       const pct = Math.min(100, (timeMs / TOTAL_DURATION_MS) * 100);
       progressBar.style.width = `${pct}%`;
-      timeDisplay.textContent = `${formatTime(timeMs)} / 01:00`;
+      const s = Math.floor(timeMs / 1000);
+      const m = Math.floor(s / 60);
+      const remS = s % 60;
+      timeDisplay.textContent = `${String(m).padStart(2,'0')}:${String(remS).padStart(2,'0')} / 01:00`;
 
-      // 3. Scene 1 Number Animation
+      // 4. Scene 1 Dynamic Stat Counter ($0 -> $800B)
       if (currentSceneIdx === 0) {
-        const p = Math.min(1, timeMs / 8000);
-        const val = Math.floor(p * 800);
-        const counterEl = document.getElementById("stat-counter");
+        const countP = Math.min(1, (timeMs / 7000));
+        const val = Math.floor(countP * 800);
+        const counterEl = document.getElementById("counter-800");
         if (counterEl) counterEl.textContent = `$${val}B`;
       }
 
-      // 4. Scene 3 Persona Highlights
+      // 5. Scene 3 Carousel Card Highlighting (Act 1 -> 2 -> 3 -> 4)
       if (currentSceneIdx === 2) {
-        const subTime = timeMs - 24000;
-        const pIdx = Math.min(3, Math.floor(subTime / 5000));
-        ["card-p1", "card-p2", "card-p3", "card-p4"].forEach((cid, i) => {
-          const card = document.getElementById(cid);
-          if (i === pIdx) {
+        const subMs = timeMs - 24000;
+        const pIdx = Math.min(3, Math.floor(subMs / 5000));
+        ["deck-p1", "deck-p2", "deck-p3", "deck-p4"].forEach((id, idx) => {
+          const card = document.getElementById(id);
+          if (idx === pIdx) {
             card.classList.add("highlight");
           } else {
             card.classList.remove("highlight");
           }
         });
 
-        // Trigger refund sound on Act 3
-        if (pIdx === 2 && !window.__r0_pinged) {
-          AudioEngine.sfxSuccess();
-          window.__r0_pinged = true;
+        // Instant Refund chime on Act 3
+        if (pIdx === 2 && !window.__chimeTriggered) {
+          SoundFX.payoutChime();
+          window.__chimeTriggered = true;
         } else if (pIdx !== 2) {
-          window.__r0_pinged = false;
+          window.__chimeTriggered = false;
         }
       }
     }
 
     // Animation Loop
-    function loop(now) {
+    function frame(now) {
       if (!isPlaying) return;
-      if (!lastTickTime) lastTickTime = now;
-      const delta = now - lastTickTime;
-      lastTickTime = now;
+      if (!lastTimestamp) lastTimestamp = now;
+      const delta = now - lastTimestamp;
+      lastTimestamp = now;
 
       currentTimeMs += delta;
       if (currentTimeMs >= TOTAL_DURATION_MS) {
@@ -687,17 +888,17 @@
         pause();
       }
 
-      renderFrame(currentTimeMs);
-      if (isPlaying) requestAnimationFrame(loop);
+      render3D(currentTimeMs);
+      if (isPlaying) requestAnimationFrame(frame);
     }
 
     function play() {
-      AudioEngine.init();
+      SoundFX.init();
       if (currentTimeMs >= TOTAL_DURATION_MS) currentTimeMs = 0;
       isPlaying = true;
-      lastTickTime = null;
+      lastTimestamp = null;
       btnPlay.textContent = "⏸";
-      requestAnimationFrame(loop);
+      requestAnimationFrame(frame);
     }
 
     function pause() {
@@ -713,12 +914,12 @@
       const rect = timeline.getBoundingClientRect();
       const pos = (e.clientX - rect.left) / rect.width;
       currentTimeMs = Math.floor(pos * TOTAL_DURATION_MS);
-      renderFrame(currentTimeMs);
+      render3D(currentTimeMs);
     });
 
     btnSound.addEventListener("click", () => {
-      AudioEngine.enabled = !AudioEngine.enabled;
-      btnSound.innerHTML = AudioEngine.enabled ? "<span>🔊</span> AUDIO ON" : "<span>🔇</span> MUTED";
+      SoundFX.enabled = !SoundFX.enabled;
+      btnSound.innerHTML = SoundFX.enabled ? "<span>🔊</span> AUDIO ON" : "<span>🔇</span> MUTED";
     });
 
     btnFullscreen.addEventListener("click", () => {
@@ -729,7 +930,6 @@
       }
     });
 
-    // Spacebar to Play/Pause, F for fullscreen
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
         e.preventDefault();
@@ -741,8 +941,8 @@
       }
     });
 
-    // Initial Frame
-    renderFrame(0);
+    // Render Initial Frame
+    render3D(0);
   </script>
 </body>
 </html>
