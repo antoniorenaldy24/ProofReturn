@@ -18,7 +18,9 @@ dist-ssr/
 .next/
 *.local
 *.zip
+*.tar
 storefront/
+audit-bundle/
 
 # Environment & Secrets (Section 12.1 / 35.2)
 .env
