@@ -15,7 +15,10 @@ build/
 # Node / Frontend
 node_modules/
 dist-ssr/
+.next/
 *.local
+*.zip
+storefront/
 
 # Environment & Secrets (Section 12.1 / 35.2)
 .env

@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "echo \"Run Vite dev servers for demo-storefront, packing-station, shopper-portal, merchant-console\"",
+    "dev": "npm --prefix apps/demo-storefront run dev",
     "lint": "echo \"Frontend TypeScript & accessibility checks\"",
     "test": "node --test --experimental-strip-types packages/ui/tests/frontend.test.ts"
   }
