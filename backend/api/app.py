@@ -197,6 +197,13 @@ def create_app(
 ) -> FastAPI:
     """Create the ProofReturn /v1 FastAPI application with persistent repository and settings (AUD-14)."""
     import os
+    # RV4-16 / J-03: Ensure structured and operational logs are visible at INFO level in console during demo runs
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    logging.getLogger("proofreturn").setLevel(logging.INFO)
+
     resolved_settings = settings or get_settings()
     if demo_mode is not None:
         is_demo = demo_mode
@@ -1211,7 +1218,8 @@ def create_app(
         challenge_not_verified = False
         if req_body.text_in_media and req_body.text_in_media.strip():
             obs_text = req_body.text_in_media.strip().upper()
-            challenge_valid = bool(stored_nonce and (stored_nonce in obs_text or obs_text in stored_nonce))
+            # RV4-02: Enforce full nonce match (token in text). Never accept partial nonce fragments (obs_text in stored_nonce).
+            challenge_valid = bool(stored_nonce and len(stored_nonce) >= 4 and stored_nonce in obs_text)
             if not challenge_valid:
                 return _problem(
                     409,

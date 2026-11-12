@@ -156,19 +156,19 @@ const GRADE_INPUTS: Array<Omit<GradeTier, "refund">> = [
   },
   {
     grade: "B",
-    rate: 0.85,
+    rate: 0.95,
     condition: "Light wear — fully functional",
     wear: "Faint surface marks visible under raking light.",
   },
   {
     grade: "C",
-    rate: 0.65,
+    rate: 0.8,
     condition: "Visible wear — fully functional",
     wear: "Clear cosmetic marks; nothing that affects use.",
   },
   {
     grade: "D",
-    rate: 0.4,
+    rate: 0.5,
     condition: "Significant wear or minor defects",
     wear: "Heavier wear, or a minor defect such as a scuffed hinge.",
   },
@@ -220,7 +220,7 @@ export const JURISDICTIONS: JurisdictionFixture[] = [
    so this is a clearly-labeled configurable demonstration value. */
 export const MISDECLARATION = {
   key: "$F",
-  demoDefault: 18,
+  demoDefault: 15,
   min: 0,
   max: 50,
   step: 0.5,

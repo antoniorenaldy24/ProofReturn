@@ -23,42 +23,49 @@ ProofReturn is a fair, evidence-based returns engine built on PayPal Sandbox and
 
 ---
 
-## Quick Start (Judge Mode — CPU-Only, `F-16`, `NFR-15`)
+## Quick Start (Judge Mode — Local Demo Evaluation)
 
-1. Copy the environment template:
-   ```bash
-   cp .env.example .env
-   ```
+### 1. Generate Testing Secrets & Configuration (`.env`)
+Per `RV-01`, configuration strictly rejects unreplaced placeholders. Generate valid random 32-byte demo keys with:
+```bash
+python3 -c "import secrets; print(f'DEMO_BOOTSTRAP_KEY={secrets.token_hex(32)}\nDEMO_WEBHOOK_SECRET={secrets.token_hex(32)}\nAUTH_SIGNING_KEY={secrets.token_hex(32)}\nPLATFORM_SIGNING_SEED_HEX={secrets.token_hex(32)}\nPACKER_SIGNING_SEED_HEX={secrets.token_hex(32)}\nSERIAL_HASH_SALT={secrets.token_hex(32)}\nPAYER_HASH_SALT={secrets.token_hex(32)}\nDATABASE_URL=sqlite:///data/proofreturn.db\nDEMO_MODE=true\nENVIRONMENT=local\nMODE=judge\nRUN_MIGRATIONS_ON_START=true')" > .env
+```
 
-2. Start the Lite Docker Compose profile (PostgreSQL 16 + pgvector, Redis, MinIO, and FastAPI service):
-   ```bash
-   docker compose -f infra/docker-compose.yml --profile lite up -d --build
-   ```
-   *(Or using the Makefile shortcut: `make up COMPOSE_PROFILE=lite`)*
+### 2. Database Migrations & Catalog Seed
+```bash
+mkdir -p data
+uv run alembic upgrade head
+python3 scripts/seed.py
+```
 
-3. Verify service readiness probe:
-   ```bash
-   curl -s http://localhost:8000/v1/ready
-   ```
-   Expected output:
-   ```json
-   {
-     "status": "ready",
-     "database_connected": true,
-     "active_alerts_count": 0,
-     "demo_mode": true
-   }
-   ```
+### 3. Run Backend API
+```bash
+uv run uvicorn backend.api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+Verify readiness probe:
+```bash
+curl -s http://localhost:8000/v1/ready
+```
+Expected output:
+```json
+{
+  "status": "ready",
+  "database_connected": true,
+  "active_alerts_count": 0,
+  "demo_mode": true
+}
+```
 
-4. Alternatively, run locally on bare-metal with Python 3.12 and `uv`:
-   ```bash
-   make bootstrap
-   make check-refs
-   make gate
-   make test
-   make sim
-   make run
-   ```
+### 4. Run Frontend Unified Demo Storefront
+```bash
+cd apps/demo-storefront
+npm run dev
+```
+Open `http://localhost:3000` in your browser. The unified demo provides:
+- **01 Storefront ("The Note")**: Intaglio banknote interface, headphones catalog, and CIRC refund ladder.
+- **02 Packing Station ("The Mint")**: Condition Passport minting and dock check-in.
+- **03 Shopper Return ("The Claim")**: Conformal return declaration, challenge nonce photo evidence, and fast-lane R0 release.
+- **04 Merchant Console ("The Ledger")**: Return KPIs, reviewer triage queue, and CIRC policy simulator.
 
 ---
 

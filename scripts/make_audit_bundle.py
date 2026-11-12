@@ -215,22 +215,39 @@ npm test
 
 ## 2. Remediation & Hardening in this Update (R4 Auditor Findings)
 
-1. **Linux Ext4 Case-Sensitivity Fix**:
-   - Corrected test file path in `backend/tests/remediation/test_remediation_tahap5_clean_architecture_and_ops.py` to `docs/ADR/ADR-028-google-gemini-multimodal-grader.md`, matching exact disk casing.
-   - All 279 backend pytest tests now pass natively on Linux ext4.
+1. **Storefront CIRC Curve Alignment (RV4-07 / J-01)**:
+   - `apps/demo-storefront/src/lib/data.ts` (`CIRC_GRADES`) updated to exact canonical engine US rates: A 1.00 ($380.00), B 0.95 ($361.00), C 0.80 ($304.00), D 0.50 ($190.00).
+   - This strictly satisfies the US jurisdiction minimums in `config/jurisdiction_table.json` and ensures complete consistency between storefront displays and engine settlement.
 
-2. **Frontend Next.js Proxy Security Hardening**:
+2. **Nonce Challenge Verification Hardening (RV4-02 / J-02)**:
+   - `backend/api/app.py`: Removed `obs_text in stored_nonce` substring fallback. The full challenge nonce must be present in the observed OCR text (`stored_nonce in obs_text`). Partial fragments (e.g. `"7"`, `"-"`, `"PR"`, `"NONCE"`) are strictly rejected with 409 Conflict.
+   - Added negative regression tests for nonce fragments in `test_remediation_tahap13_guards_and_caps.py`.
+
+3. **Structured Operational Logging (RV4-16 / J-03)**:
+   - `create_app` in `backend/api/app.py` configures `logging.basicConfig(level=logging.INFO)` so that structured JSON access and domain events are visibly output to the console during `uvicorn` demo runs.
+
+4. **Frontend Next.js Proxy Anti-Bypass & Hardening (RV4-01 / J-04)**:
    - `apps/demo-storefront/src/app/api/backend/[...path]/route.ts`:
-     - **Blocked Internal Routes**: Requests targeting `ops/*`, `metrics`, and `auth/staff-token` are blocked immediately with `403 Forbidden`. Loopback metrics and operational endpoints are strictly isolated from the public frontend proxy.
-     - **Removed Global Bootstrap Key Injection**: The proxy no longer injects `X-Demo-Bootstrap-Key` globally into arbitrary requests. It is scoped strictly to demo shopper magic link issuance (`auth/shopper-magic-link`) or when explicitly supplied by the caller.
+     - Strips and rejects any double-encoded characters or path traversal sequences (`%`, `..`, `.`, `/`, `\`) with 403 Forbidden.
+     - Resolves canonical target URL pathname and verifies that normalized path stays under `/v1/` and matches only allowed prefixes (`ready`, `health`, `passports`, `orders`, `returns`, `simulate`, `auth/shopper-magic-link`).
+     - Blocks `ops/*`, `metrics`, and `auth/staff-token` with 403 Forbidden.
+     - Removed hardcoded default key string in `route.ts`.
+     - Completely blocks forwarding of client-supplied `X-Demo-Bootstrap-Key`.
 
-3. **Outbox Executor Idempotency Enforcement (API-06, ARC-19)**:
+5. **Accurate Module References & Setup Documentation (RV4-05 / J-05)**:
+   - Corrected references to `backend/payments/client.py` and `backend/payments/outbox.py`.
+   - Detailed exact Alembic migration (`uv run alembic upgrade head`) and catalog seeding (`scripts/seed.py`) sequence.
+
+6. **Linux Ext4 Case-Sensitivity Fix**:
+   - Corrected test file path in `backend/tests/remediation/test_remediation_tahap5_clean_architecture_and_ops.py` to `docs/ADR/ADR-028-google-gemini-multimodal-grader.md`, matching exact disk casing. All 279 backend pytest tests now pass natively on Linux ext4.
+
+7. **Outbox Executor Idempotency Enforcement (API-06, ARC-19)**:
    - `POST /v1/ops/outbox/run` now requires the `Idempotency-Key` header, returning `400 IDEMPOTENCY_KEY_REQUIRED` when missing and caching executions in the replay cache.
 
-4. **Strict Frontend TypeScript Build**:
+8. **Strict Frontend TypeScript Build**:
    - Removed `typescript: { ignoreBuildErrors: true }` from `apps/demo-storefront/next.config.ts`.
    - Fixed all TypeScript typing mismatches across components (`checkout-bay.tsx`, `transfer-room.tsx`, `ornaments.tsx`, `nav.tsx`, `odometer.tsx`).
-   - Removed untracked duplicate route `/storefront` which was previously masked by `.gitignore`.
+   - Removed untracked duplicate route `/storefront`.
    - `next build` now executes with strict zero-error TypeScript validation.
    - Pre-packaged native Linux dependencies in `node_modules-linux.tar.xz` (built with Node 22 on Linux x86_64) for offline execution.
 
@@ -242,7 +259,7 @@ Per Section 8.1, Section 12, and Section 35 of ProofReturn SSOT v1.21:
 
 1. **PayPal Sandbox & Checkout (T6 Option B / Task 10)**:
    - Live PayPal calls require outward network connectivity to `api-m.sandbox.paypal.com` (`TM-16`).
-   - In offline mode or local demo, `backend/payments/service.py` (`PayPalSandboxClient` and `RefundOutboxExecutor`) simulates PayPal order creation and partial captures using local cryptographic fixtures. No external calls occur offline.
+   - In offline mode or local demo, `backend/payments/client.py` (`PayPalSandboxClient`) and `backend/payments/outbox.py` (`RefundOutboxExecutor`) simulate and process PayPal order creation and partial captures using local cryptographic fixtures. No external calls occur offline.
    - The Storefront transfer room (`apps/demo-storefront/src/components/checkout/transfer-room.tsx`) provides an interactive simulation of the PayPal Sandbox flow.
 
 2. **Multimodal AI & Gemini Vision Model (FR-15..20, FR-80, FR-99)**:

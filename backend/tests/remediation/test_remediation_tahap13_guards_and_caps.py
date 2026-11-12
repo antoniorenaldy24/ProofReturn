@@ -130,6 +130,25 @@ def test_guard_challenge_valid_false_returns_409(test_repo: DatabaseRepository, 
     body = resp.json()
     assert body["code"] == "INVALID_STATE_TRANSITION"
 
+    # RV4-02: Partial nonce fragments must also be rejected with 409 (never accept substrings of stored nonce)
+    for frag in ["NONCE", "CORRECT", "1234", "7", "-", "N"]:
+        r_frag = client.post(
+            "/v1/returns/ret_demo_1/evidence",
+            headers={"Authorization": f"Bearer {token}", "Idempotency-Key": f"ik-t13-ev-frag-{frag}"},
+            json={
+                "kind": "VIDEO_CHALLENGE",
+                "object_key": "raw/ret_demo_1/challenge.mp4",
+                "sha256": "a" * 64,
+                "challenge_step": 1,
+                "faces_detected": 0,
+                "client_blur_applied": False,
+                "blur_latency_ms": 10.0,
+                "text_in_media": frag,
+            },
+        )
+        assert r_frag.status_code == 409, f"Fragment '{frag}' should be rejected with 409"
+        assert r_frag.json()["code"] == "INVALID_STATE_TRANSITION"
+
 
 def test_guard_eligible_false_returns_409() -> None:
     """Guard eligible: OFFER_KEEP when eligible=False -> InvalidStateTransitionError."""
